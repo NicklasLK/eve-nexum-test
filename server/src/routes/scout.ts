@@ -73,7 +73,7 @@ async function fetchAndBuild(): Promise<ScoutConnection[]> {
   }
   if (!res.ok) throw new Error(`eve-scout ${res.status}`);
   const list = await res.json() as RawScoutEntry[];
-  return list
+  const out = list
     .filter(r => r.signature_type === 'wormhole')
     .map(r => ({
       id:             r.id,
@@ -92,6 +92,10 @@ async function fetchAndBuild(): Promise<ScoutConnection[]> {
       inSignature:    r.in_signature,
       whExitsOutward: r.wh_exits_outward,
     }));
+  // Once per cache refresh (5 min) — a positive signal that the Thera/Turnur
+  // feed is flowing, so an operator can tell "working" from "silently empty".
+  log.info(`loaded ${out.length} Thera/Turnur connections from eve-scout`);
+  return out;
 }
 
 router.get('/', cachedJsonHandler(cache, fetchAndBuild, {
