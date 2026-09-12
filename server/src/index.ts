@@ -55,6 +55,7 @@ import fleetRoutesRouter from './routes/fleetRoutes.js';
 import { jumpBridgesRouter } from './routes/jumpBridges.js';
 import { bridgeServicesRouter } from './routes/bridgeServices.js';
 import { startStructureReaderSync } from './services/structureReaderSync.js';
+import { backfillGrantedScopes } from './services/scopeBackfill.js';
 import { authLimiter, esiLimiter, publicLimiter, appLimiter } from './middleware/rateLimits.js';
 import { originGuard } from './middleware/originGuard.js';
 import { createLogger } from './utils/logger.js';
@@ -197,6 +198,7 @@ migrate()
   .then(async () => {
     await seedDiscordWebhooksFromEnv();
     await seedAccessGrantsFromEnv();
+    await backfillGrantedScopes().catch((err) => rootLog.warn('scope backfill failed:', err));
     await cleanupMaps();
     setInterval(cleanupMaps, 60 * 60 * 1000); // re-check hourly
     await initActivity();

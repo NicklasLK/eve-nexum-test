@@ -84,6 +84,12 @@ export interface AuthUser {
   canViewReports: boolean;
   /** Optional features this deployment runs; absent fields mean "on" (older servers). */
   features?: Partial<DeploymentFeatures>;
+  /** ESI scopes the current token carries. */
+  grantedScopes?: string[];
+  /** Extra scope sets an admin assigned to this character (structures, standings, windows, fleet). */
+  extraScopes?: string[];
+  /** Assigned extras the token does not cover yet — the "Grant extra access" prompt. */
+  missingExtras?: string[];
   /** External read API (/api/v1) is switched off — the UI disables API-key creation. */
   externalApiDisabled?: boolean;
 }

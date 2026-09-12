@@ -788,6 +788,12 @@ export async function migrate() {
     -- level so one Contact-Manager pulling once benefits the whole corp.
     -- Personal character contacts stay per-character.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS alliance_id INTEGER;
+    -- ESI scope tiers (src/scopes.ts): the scopes the current token actually
+    -- carries (from the SSO JWT at login / re-authorisation) and the extra
+    -- scope sets an admin assigned to this character (structures, standings,
+    -- windows, fleet), picked up through GET /auth/elevate.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS granted_scopes TEXT   NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS extra_scopes   TEXT[] NOT NULL DEFAULT '{}';
 
     CREATE TABLE IF NOT EXISTS character_standings (
       character_id  INTEGER     NOT NULL,

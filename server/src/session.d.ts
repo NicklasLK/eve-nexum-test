@@ -22,6 +22,9 @@ declare module 'express-session' {
     /** True while an admin is authorising a jump-bridge structure reader (an
      *  alt in the corp that owns the Ansiblex gates); same callback, not a login. */
     structureReaderFlow?: boolean;
+    /** True while the active character re-authorises with admin-assigned extra
+     *  scopes (GET /auth/elevate); the callback then only swaps the token. */
+    elevateFlow?: boolean;
     // Cached UI preferences — kept in sync by PATCH /auth/preferences so
     // /auth/me doesn't have to hit the DB on every page load.
     prefs: {

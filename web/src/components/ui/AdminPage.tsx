@@ -530,7 +530,11 @@ interface AdminUser {
   lastKnownSystemId:   number | null;
   lastKnownSystemName: string | null;
   lastKnownSystemAt:   string | null;
+  extraScopes?:        string[] | null;
+  missingExtras?:      string[];
 }
+
+const EXTRA_KEYS = ['structures', 'standings', 'windows', 'fleet'] as const;
 
 type UserSortKey = 'characterName' | 'corpTicker' | 'allianceTicker' | 'role' | 'blocked' | 'lastLogin' | 'lastKnownSystemName';
 interface UserSort { key: UserSortKey; dir: 'asc' | 'desc' }
@@ -629,6 +633,16 @@ function UsersTab() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
+  async function changeExtras(u: AdminUser, extras: string[]) {
+    setBusyId(u.id);
+    try {
+      await api(`/api/admin/users/${u.id}/extra-scopes`, { method: 'PATCH', body: JSON.stringify({ extras }) });
+      await load();
+    } catch (err) {
+      toast.error(err instanceof ApiError && err.serverMessage ? err.serverMessage : t('admin.users.updateFailed', { defaultValue: 'Update failed' }));
+    } finally { setBusyId(null); }
+  }
+
   async function changeRole(u: AdminUser, role: Role) {
     if (u.role === role) return;
     setBusyId(u.id);
@@ -698,6 +712,7 @@ function UsersTab() {
               <SortableTh col="corpTicker"     label={t('admin.users.colCorp')}      sort={sort} onToggle={toggleSort} />
               <SortableTh col="allianceTicker" label={t('admin.users.colAlliance')}  sort={sort} onToggle={toggleSort} />
               <SortableTh col="role"           label={t('admin.users.colRole')}      sort={sort} onToggle={toggleSort} />
+              <th title={t('admin.users.extrasHint')}>{t('admin.users.colExtras')}</th>
               <SortableTh col="blocked"        label={t('admin.users.colStatus')}    sort={sort} onToggle={toggleSort} />
               <SortableTh col="lastLogin"      label={t('admin.users.colLastLogin')} sort={sort} onToggle={toggleSort} />
               <SortableTh col="lastKnownSystemName" label={t('admin.users.colLastKnown')} sort={sort} onToggle={toggleSort} />
@@ -744,6 +759,22 @@ function UsersTab() {
                     ) : (
                       <span className={styles.mMono}>{formatRole(u.role as AuthRole)}</span>
                     )}
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px' }}>
+                      {EXTRA_KEYS.map((k) => {
+                        const on = (u.extraScopes ?? []).includes(k);
+                        const pending = on && (u.missingExtras ?? []).includes(k);
+                        return (
+                          <label key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, whiteSpace: 'nowrap', opacity: canEdit ? 1 : 0.8 }}
+                            title={pending ? t('admin.users.extrasPending') : undefined}>
+                            <input type="checkbox" checked={on} disabled={!canEdit || isBusy}
+                              onChange={(e) => changeExtras(u, e.target.checked ? [...(u.extraScopes ?? []), k] : (u.extraScopes ?? []).filter((x) => x !== k))} />
+                            <span style={{ color: pending ? '#f0a030' : undefined }}>{t(`admin.users.extras.${k}`)}{pending ? ' ⏳' : ''}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </td>
                   <td>
                     {u.blocked

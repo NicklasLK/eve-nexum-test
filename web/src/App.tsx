@@ -180,16 +180,20 @@ function AppShell() {
     const params = new URLSearchParams(window.location.search);
     const added = params.get('added');
     const linkError = params.get('link_error');
+    const elevated = params.get('elevated') === '1';
+    const elevateError = params.get('elevate_error');
     // The server adds ?login=success only on the redirect right after a real
     // EVE SSO login — so this fires once per login, not on every page load.
     const loggedIn = params.get('login') === 'success';
-    if (!added && !linkError && !loggedIn) return;
+    if (!added && !linkError && !loggedIn && !elevated && !elevateError) return;
     // Strip the params synchronously so a refresh — or StrictMode's dev
     // re-run of this effect — doesn't repeat the toast / re-fire analytics.
     const url = new URL(window.location.href);
     url.searchParams.delete('added');
     url.searchParams.delete('link_error');
     url.searchParams.delete('login');
+    url.searchParams.delete('elevated');
+    url.searchParams.delete('elevate_error');
     window.history.replaceState({}, '', url.toString());
 
     // Push a GTM "login" event so a tag can record the sign-in. dataLayer is
@@ -204,6 +208,8 @@ function AppShell() {
     setTimeout(() => {
       if (added) toast.success(i18n.t('account.characterAdded', { name: added }));
       if (linkError) toast.error(i18n.t(linkError === 'not_in_corp' ? 'account.linkFailedNotInCorp' : 'account.linkFailed'));
+      if (elevated) toast.success(i18n.t('account.elevated'));
+      if (elevateError) toast.error(i18n.t(elevateError === 'wrong_character' ? 'account.elevateWrongCharacter' : 'account.elevateFailed'));
     }, 0);
   }, []);
 

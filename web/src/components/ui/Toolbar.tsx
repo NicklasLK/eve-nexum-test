@@ -632,6 +632,20 @@ export function Toolbar() {
           <span>{t('fleetRoutes.title')}</span>
         </button>
 
+        {/* An admin assigned extra ESI scopes to this character that its token
+            does not carry yet: one click re-authorises with them. */}
+        {!!user?.missingExtras?.length && (
+          <a
+            className="toolbar__toggle toolbar__toggle--prominent toolbar__labelled"
+            href="/auth/elevate"
+            data-tooltip={t('account.elevateTooltip', { list: user.missingExtras.map((k) => t(`admin.users.extras.${k}`, { defaultValue: k })).join(', ') })}
+            aria-label={t('account.elevate')}
+          >
+            <KeyIcon size={18} weight="regular" />
+            <span>{t('account.elevate')}</span>
+          </a>
+        )}
+
         {/* Layout switch. Lives here rather than in the sidebar's display
             options: those are set once, whereas people flip this back and
             forth while deciding which layout suits them. */}

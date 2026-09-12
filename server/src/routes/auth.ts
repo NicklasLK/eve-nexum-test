@@ -9,6 +9,7 @@ import { esiFetch } from '../utils/esi.js';
 import { refreshStandingsForUser } from '../services/standings.js';
 import { syncCorpStructures } from '../services/structureSync.js';
 import { syncStructureReaders } from '../services/structureReaderSync.js';
+import { scopesFor, missingExtras, scopesFromClaim, isExtraKey } from '../scopes.js';
 import { isLoginPermitted, standingsPermitLogin } from '../services/accessGrants.js';
 import { seedDemoMap } from '../services/demoMap.js';
 
@@ -24,33 +25,9 @@ const FRONTEND_URL  = process.env.FRONTEND_URL ?? 'http://localhost:5174';
 const EVE_AUTH_URL  = 'https://login.eveonline.com/v2/oauth/authorize';
 const EVE_TOKEN_URL = 'https://login.eveonline.com/v2/oauth/token';
 
-// Base scopes: every one of these must be enabled on the deployment's EVE
-// application, or SSO refuses every login with invalid_scope. Nothing may be
-// added here without operators enabling it first — see OPTIONAL_SCOPES below
-// for how a new scope is introduced safely.
-const SSO_SCOPES = [
-  'esi-location.read_location.v1',
-  'esi-location.read_ship_type.v1',
-  'esi-universe.read_structures.v1',
-  'esi-corporations.read_structures.v1',
-  'esi-corporations.read_corporation_membership.v1',
-  'esi-ui.open_window.v1',
-  'esi-ui.write_waypoint.v1',
-  'esi-characters.read_corporation_roles.v1',
-  'esi-location.read_online.v1',
-  // Read player standings (contacts) so the UI can colour-tag structures /
-  // killboard / sov by your standing toward each entity. Corp / alliance reads
-  // only succeed for characters with the Contact Manager role; reads gracefully
-  // no-op otherwise.
-  'esi-characters.read_contacts.v1',
-  'esi-corporations.read_contacts.v1',
-  'esi-alliances.read_contacts.v1',
-  // Fleet member tracking — show fleet-mate locations on the map as purple
-  // dots. Requires the character to be the fleet boss or a wing/squad
-  // commander; ESI returns 403 to everyone else and the UI degrades silently.
-  'esi-fleets.read_fleet.v1',
-];
-
+// Login scopes live in src/scopes.ts: the member set is requested at every
+// login; extras are assigned per character by an admin and picked up via
+// GET /auth/elevate.
 // Scopes a deployment opts into AFTER enabling them on its own EVE application.
 // They can never be added to the list above: requesting a scope the application
 // doesn't have makes SSO reject the entire authorize request with invalid_scope,
@@ -58,20 +35,18 @@ const SSO_SCOPES = [
 // upgrade — not degrade a feature, break the door. Off by default; each feature
 // behind one degrades to its pre-existing behaviour while it's off.
 function ssoScopes(): string {
-  const scopes = [...SSO_SCOPES];
-  if (config.cloneScope) scopes.push('esi-clones.read_clones.v1');
-  return scopes.join(' ');
+  return scopesFor([], config.cloneScope).join(' ');
 }
 
 // Build the SSO authorize redirect with a fresh CSRF state and send the user.
-function beginSso(req: Request, res: Response): void {
+function beginSso(req: Request, res: Response, scope: string = ssoScopes()): void {
   const state = randomBytes(32).toString('hex');
   req.session.oauthState = state;
   const params = new URLSearchParams({
     response_type: 'code',
     redirect_uri:  CALLBACK_URL,
     client_id:     CLIENT_ID,
-    scope:         ssoScopes(),
+    scope,
     state,
   });
   req.session.save((err) => {
@@ -112,6 +87,58 @@ authRouter.get('/add-character', async (req, res) => {
   req.session.addCharacterOwnerId = ownerId;
   beginSso(req, res);
 });
+
+// GET /auth/elevate — re-authorise the ACTIVE character with the extra scopes
+// an admin assigned to it (Admin › Users). Login itself only ever asks for the
+// member set, because the SSO request is built before EVE tells us who is
+// logging in; this is how a director or an admin picks up corp structures,
+// standings, in-game windows or fleet access afterwards.
+authRouter.get('/elevate', async (req, res) => {
+  if (!req.session.userId) { res.redirect(`${FRONTEND_URL}?error=not_authenticated`); return; }
+  const { rows } = await db.query<{ extra_scopes: string[] | null }>(
+    `SELECT extra_scopes FROM users WHERE id = $1`, [req.session.userId]);
+  const extras = (rows[0]?.extra_scopes ?? []).filter(isExtraKey);
+  if (!extras.length) { res.redirect(`${FRONTEND_URL}?elevate_error=nothing_assigned`); return; }
+  req.session.elevateFlow = true;
+  beginSso(req, res, scopesFor(extras, config.cloneScope).join(' '));
+});
+
+// Finish an elevate round trip: the SAME character must come back, and only
+// the stored token and its scope list change — the session is untouched.
+async function completeElevateAuth(code: string, req: Request, res: Response): Promise<void> {
+  const tokenRes = await fetch(EVE_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: `Basic ${Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64')}`,
+    },
+    body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: CALLBACK_URL }),
+  });
+  if (!tokenRes.ok) { res.redirect(`${FRONTEND_URL}?elevate_error=token_exchange`); return; }
+  const tokens = await tokenRes.json() as { access_token: string; refresh_token: string; expires_in: number };
+  const claims = JSON.parse(
+    Buffer.from(tokens.access_token.split('.')[1], 'base64url').toString('utf8'),
+  ) as { sub: string; scp?: string | string[] };
+  const characterId = parseInt(claims.sub.split(':')[2], 10);
+  if (characterId !== req.session.characterId) {
+    res.redirect(`${FRONTEND_URL}?elevate_error=wrong_character`);
+    return;
+  }
+  const granted = scopesFromClaim(claims.scp);
+  await db.query(
+    `UPDATE users SET access_token = $1, refresh_token = $2, token_expires_at = $3, granted_scopes = $4, updated_at = NOW()
+      WHERE id = $5`,
+    [encryptToken(tokens.access_token), encryptToken(tokens.refresh_token),
+     new Date(Date.now() + tokens.expires_in * 1000), granted.join(' '), req.session.userId],
+  );
+  // The new token may unlock the structure sync and standings right away.
+  void syncCorpStructures(req.session.userId!, { force: true }).catch(() => undefined);
+  void refreshStandingsForUser({
+    userId: req.session.userId!, characterId, corpId: req.session.userCorpId ?? null,
+    allianceId: req.session.userAllianceId ?? null, accessToken: tokens.access_token,
+  }).catch(() => undefined);
+  res.redirect(`${FRONTEND_URL}?elevated=1`);
+}
 
 // GET /auth/wallet-reader — admin-only authorisation of the corp wallet reader
 // used by ISK-for-maps. A separate errand from logging in: it asks for ONE extra
@@ -301,6 +328,12 @@ authRouter.get('/callback', async (req, res) => {
     await completeStructureReaderAuth(code, req.session.userId!, res);
     return;
   }
+  if (req.session.elevateFlow) {
+    delete req.session.elevateFlow;
+    if (!req.session.userId) { res.redirect(`${FRONTEND_URL}?error=not_authenticated`); return; }
+    await completeElevateAuth(code, req, res);
+    return;
+  }
 
   // Captured before any session.regenerate(): if set, this SSO round-trip is
   // an authenticated "add character" link, not a fresh login.
@@ -345,7 +378,8 @@ authRouter.get('/callback', async (req, res) => {
     // Decode the JWT payload to extract character info (EVE SSO v2)
     const jwtPayload = JSON.parse(
       Buffer.from(tokens.access_token.split('.')[1], 'base64url').toString('utf8'),
-    ) as { sub: string; name: string };
+    ) as { sub: string; name: string; scp?: string | string[] };
+    const grantedScopes = scopesFromClaim(jwtPayload.scp).join(' ');
 
     // sub format: "CHARACTER:EVE:12345678"
     const characterId = parseInt(jwtPayload.sub.split(':')[2], 10);
@@ -425,13 +459,14 @@ authRouter.get('/callback', async (req, res) => {
       : (invitedRole ?? config.defaultUserRole);
 
     const { rows } = await db.query<{ id: number; role: string; blocked: boolean }>(
-      `INSERT INTO users (character_id, character_name, access_token, refresh_token, token_expires_at, role, corp_id, alliance_id, last_login_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $8, $10, NOW())
+      `INSERT INTO users (character_id, character_name, access_token, refresh_token, token_expires_at, role, corp_id, alliance_id, last_login_at, granted_scopes)
+       VALUES ($1, $2, $3, $4, $5, $6, $8, $10, NOW(), $12)
        ON CONFLICT (character_id) DO UPDATE SET
          character_name   = EXCLUDED.character_name,
          access_token     = EXCLUDED.access_token,
          refresh_token    = EXCLUDED.refresh_token,
          token_expires_at = EXCLUDED.token_expires_at,
+         granted_scopes   = EXCLUDED.granted_scopes,
          last_login_at    = NOW(),
          corp_id          = COALESCE($8::int,  users.corp_id),
          alliance_id      = COALESCE($10::int, users.alliance_id),
@@ -445,7 +480,7 @@ authRouter.get('/callback', async (req, res) => {
          updated_at       = NOW()
        RETURNING id, role, blocked`,
       [characterId, jwtPayload.name, encryptToken(tokens.access_token), encryptToken(tokens.refresh_token), expiresAt,
-       defaultRole, config.adminCharId, userCorpId, !config.restrictedMode, userAllianceId, bootstrapRole],
+       defaultRole, config.adminCharId, userCorpId, !config.restrictedMode, userAllianceId, bootstrapRole, grantedScopes],
     );
 
     const userId = rows[0].id;
@@ -683,6 +718,12 @@ authRouter.get('/me', async (req, res) => {
     [req.session.userId],
   );
   const lk = lksRows[0];
+  // Scope state for the "grant extra access" prompt: what the token carries vs
+  // what an admin assigned.
+  const { rows: scopeRows } = await db.query<{ granted_scopes: string; extra_scopes: string[] | null }>(
+    `SELECT granted_scopes, extra_scopes FROM users WHERE id = $1`, [req.session.userId]);
+  const grantedScopes = (scopeRows[0]?.granted_scopes ?? '').split(' ').filter(Boolean);
+  const extraScopes   = (scopeRows[0]?.extra_scopes ?? []).filter(isExtraKey);
   // Number() guards against node-pg returning the id as a string (it does for
   // BIGINT columns) — the client compares it numerically against map system ids.
   const lastKnownSystem = lk?.id != null
@@ -741,6 +782,11 @@ authRouter.get('/me', async (req, res) => {
       canViewReports: config.reportsCharId !== null && req.session.characterId === config.reportsCharId,
       // When the external API is off, the UI hides/disables API-key creation.
       externalApiDisabled: config.externalApiDisabled,
+      // ESI access: scopes the current token carries, extras an admin assigned,
+      // and which of those still need a re-authorisation (GET /auth/elevate).
+      grantedScopes,
+      extraScopes,
+      missingExtras: missingExtras(grantedScopes, extraScopes),
       // Which optional features this deployment runs; the UI hides the rest
       // (HIDDEN_FEATURES, KILL_FEED, ESI_CLONES_SCOPE — see config.ts).
       features: {

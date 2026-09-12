@@ -2,6 +2,7 @@ import { Router, type Request } from 'express';
 import { esiFetch } from '../utils/esi.js';
 import { getValidToken } from '../utils/eveToken.js';
 import { db } from '../db.js';
+import { EXTRA_KEYS, isExtraKey, missingExtras } from '../scopes.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { requireAdminRead } from '../middleware/requireAdminRead.js';
 import { requireReportsAccess, isReportsCharacter, corpScopeFor } from '../middleware/requireReportsAccess.js';
@@ -144,6 +145,8 @@ adminReadRouter.get('/users', async (_req, res) => {
     lastKnownSystemId:   number | null;
     lastKnownSystemName: string | null;
     lastKnownSystemAt:   string | null;
+    extraScopes:     string[] | null;
+    grantedScopes:   string;
   }>(`
     SELECT
       u.id,
@@ -153,6 +156,8 @@ adminReadRouter.get('/users', async (_req, res) => {
       u.corp_id        AS "corpId",
       u.alliance_id    AS "allianceId",
       u.blocked,
+      u.extra_scopes   AS "extraScopes",
+      u.granted_scopes AS "grantedScopes",
       u.created_at     AS "createdAt",
       u.last_login_at  AS "lastLogin",
       COALESCE(e.cnt, 0) AS "totalEvents",
@@ -189,6 +194,8 @@ adminReadRouter.get('/users', async (_req, res) => {
     return {
       ...r,
       corpTicker:     cInfo?.ticker ?? null,
+      extraScopes:    r.extraScopes ?? [],
+      missingExtras:  missingExtras((r.grantedScopes ?? '').split(' ').filter(Boolean), r.extraScopes ?? []),
       corpName:       cInfo?.name   ?? null,
       allianceTicker: aInfo?.ticker ?? null,
       allianceName:   aInfo?.name   ?? null,
@@ -199,6 +206,25 @@ adminReadRouter.get('/users', async (_req, res) => {
 });
 
 // PATCH /api/admin/users/:id/role
+// PATCH /api/admin/users/:id/extra-scopes { extras: string[] } — which extra
+// ESI scope sets this character may hold. Takes effect when the character
+// next re-authorises (the "Grant extra access" button in the app); nothing is
+// revoked from a token already issued, the assignment only stops being
+// requested next time.
+adminRouter.patch('/users/:id/extra-scopes', async (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(userId) || userId <= 0) { res.status(400).json({ error: 'invalid user id' }); return; }
+  const raw = (req.body as { extras?: unknown }).extras;
+  if (!Array.isArray(raw) || !raw.every(isExtraKey)) {
+    res.status(400).json({ error: `extras must be an array of: ${EXTRA_KEYS.join(', ')}` });
+    return;
+  }
+  const extras = [...new Set(raw)];
+  const { rowCount } = await db.query(`UPDATE users SET extra_scopes = $1, updated_at = NOW() WHERE id = $2`, [extras, userId]);
+  if (!rowCount) { res.status(404).json({ error: 'User not found' }); return; }
+  res.json({ ok: true, extras });
+});
+
 adminRouter.patch('/users/:id/role', async (req, res) => {
   const userId = parseInt(req.params.id, 10);
   const { role } = req.body as { role?: string };
