@@ -10,7 +10,7 @@ import tls from 'node:tls';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('net-probe');
-const STEP_TIMEOUT_MS = 8_000;
+const STEP_TIMEOUT_MS = 5_000;
 
 function tcpProbe(address: string, family: number): Promise<string> {
   return new Promise((resolve) => {
@@ -25,14 +25,21 @@ function tcpProbe(address: string, family: number): Promise<string> {
 
 // Handshake variants, so a stall can be tied to one property of the
 // ClientHello (protocol version, SNI, size, ALPN) rather than "TLS".
+// A big default ClientHello got silence while a one-cipher hello got an
+// immediate (failed) answer, so these bracket what the path lets through:
+// cipher count, curve list, and protocol version, one axis at a time.
+const MODERN_12 = 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305';
+const SUITES_13  = 'TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256';
 const TLS_VARIANTS: { label: string; opts: tls.ConnectionOptions & { noSni?: boolean } }[] = [
-  { label: 'default',          opts: {} },
-  { label: 'tls1.2-only',      opts: { maxVersion: 'TLSv1.2' } },
-  { label: 'tls1.3-only',      opts: { minVersion: 'TLSv1.3' } },
-  { label: 'no-sni',           opts: { noSni: true } },
-  { label: 'tiny-hello',       opts: { minVersion: 'TLSv1.3', ciphers: 'TLS_AES_128_GCM_SHA256', ecdhCurve: 'X25519' } },
-  { label: 'alpn-http/1.1',    opts: { ALPNProtocols: ['http/1.1'] } },
-  { label: 'alpn-h2',          opts: { ALPNProtocols: ['h2', 'http/1.1'] } },
+  { label: 'default',                 opts: {} },
+  { label: 'tls1.2-6-suites',         opts: { maxVersion: 'TLSv1.2', ciphers: MODERN_12 } },
+  { label: 'tls1.2-6-suites-x25519',  opts: { maxVersion: 'TLSv1.2', ciphers: MODERN_12, ecdhCurve: 'X25519:prime256v1' } },
+  { label: 'tls1.3-3-suites',         opts: { minVersion: 'TLSv1.3', ciphers: SUITES_13 } },
+  { label: 'tls1.3-3-suites-x25519',  opts: { minVersion: 'TLSv1.3', ciphers: SUITES_13, ecdhCurve: 'X25519:prime256v1' } },
+  { label: 'mixed-9-suites',          opts: { ciphers: SUITES_13 + ':' + MODERN_12 } },
+  { label: 'mixed-9-suites-x25519',   opts: { ciphers: SUITES_13 + ':' + MODERN_12, ecdhCurve: 'X25519:prime256v1' } },
+  { label: 'default-curves-trimmed',  opts: { ecdhCurve: 'X25519:prime256v1' } },
+  { label: 'tls1.3-one-suite-p256',   opts: { minVersion: 'TLSv1.3', ciphers: 'TLS_AES_128_GCM_SHA256', ecdhCurve: 'prime256v1' } },
 ];
 
 function tlsProbe(address: string, family: number, servername: string, variant: tls.ConnectionOptions & { noSni?: boolean } = {}): Promise<string> {
@@ -69,8 +76,11 @@ export async function runNetProbe(spec: string): Promise<void> {
     log.info(`${host}: lookup ${Date.now() - t0}ms -> ${uniq.map((a) => a.address).join(', ')}`);
     for (const a of uniq) {
       log.info(`${host} [${a.address}] ${await tcpProbe(a.address, a.family)}`);
+    }
+    const first = uniq[0];
+    if (first) {
       for (const v of TLS_VARIANTS) {
-        log.info(`${host} [${a.address}] ${v.label}: ${await tlsProbe(a.address, a.family, host, v.opts)}`);
+        log.info(`${host} [${first.address}] ${v.label}: ${await tlsProbe(first.address, first.family, host, v.opts)}`);
       }
     }
     const t1 = Date.now();
