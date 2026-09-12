@@ -180,8 +180,9 @@
       "colStatus": "Status",
       "colLastLogin": "Last login",
       "colExtras": "Extra ESI access",
-      "extrasHint": "Login only asks for the mapping scopes. Tick what this character may hold; they grant it with the Grant extra access button on their next visit.",
-      "extrasPending": "waiting for re-login",
+      "extrasHint": "Login only asks for the mapping scopes. Tick what this character may hold: ✓ means their current token already carries it, ⏳ means they will see a Grant extra access button and re-authorise once.",
+      "extrasPending": "Assigned — the character sees a Grant extra access button and re-authorises once to pick it up",
+      "extrasGranted": "Granted — the character's current token already carries this access",
       "extras": {
         "structures": "Corp structures",
         "standings": "Standings",

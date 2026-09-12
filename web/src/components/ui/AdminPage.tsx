@@ -767,10 +767,15 @@ function UsersTab() {
                         const pending = on && (u.missingExtras ?? []).includes(k);
                         return (
                           <label key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, whiteSpace: 'nowrap', opacity: canEdit ? 1 : 0.8 }}
-                            title={pending ? t('admin.users.extrasPending') : undefined}>
+                            title={on ? (pending ? t('admin.users.extrasPending') : t('admin.users.extrasGranted')) : undefined}>
                             <input type="checkbox" checked={on} disabled={!canEdit || isBusy}
                               onChange={(e) => changeExtras(u, e.target.checked ? [...(u.extraScopes ?? []), k] : (u.extraScopes ?? []).filter((x) => x !== k))} />
-                            <span style={{ color: pending ? '#f0a030' : undefined }}>{t(`admin.users.extras.${k}`)}{pending ? ' ⏳' : ''}</span>
+                            <span style={{ color: pending ? '#f0a030' : undefined }}>
+                              {t(`admin.users.extras.${k}`)}
+                              {on && (pending
+                                ? <span style={{ color: '#f0a030' }}> ⏳</span>
+                                : <span style={{ color: 'var(--success-bright)' }}> ✓</span>)}
+                            </span>
                           </label>
                         );
                       })}
