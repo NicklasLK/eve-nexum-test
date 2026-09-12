@@ -26,7 +26,11 @@ function tcpProbe(address: string, family: number): Promise<string> {
 function tlsProbe(address: string, family: number, servername: string): Promise<string> {
   return new Promise((resolve) => {
     const t0 = Date.now();
-    const sock = tls.connect({ host: address, port: 443, family, servername });
+    // tls.connect has no `family` option: open the TCP socket ourselves so the
+    // address family is pinned, then hand it to TLS (it waits for 'connect').
+    const raw = net.connect({ host: address, port: 443, family });
+    raw.once('error', (e: NodeJS.ErrnoException) => { resolve(`tls ERROR (tcp) ${e.code ?? e.message} after ${Date.now() - t0}ms`); });
+    const sock = tls.connect({ socket: raw, servername });
     sock.setTimeout(STEP_TIMEOUT_MS);
     sock.once('secureConnect', () => {
       const out = `tls ok ${Date.now() - t0}ms ${sock.getProtocol() ?? ''} ${sock.getCipher()?.name ?? ''} authorized=${sock.authorized}`;
