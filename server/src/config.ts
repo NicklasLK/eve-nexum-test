@@ -39,11 +39,11 @@ const CORP_MAP_TIME = parseInt(process.env.CORP_MAP_TIME ?? '30', 10);
 
 // Role a NEW user is created with on a restricted (corp/alliance) instance.
 // Existing users keep whatever role they already have. Deliberately limited to
-// the non-admin editing tiers ('readonly' | 'edit' | 'full') so a deployment can
-// start members at 'edit' — but can NEVER auto-mint admins here; 'admin' /
+// the non-admin tiers ('readonly' | 'contributor' | 'edit' | 'full') so a deployment can
+// start members at 'contributor' or 'edit' — but can NEVER auto-mint admins here; 'admin' /
 // 'alliance_admin' must always be granted per-user by an admin. Anything unknown
 // or disallowed falls back to the safe 'readonly' default (no behaviour change).
-const DEFAULT_ROLE_CHOICES = ['readonly', 'edit', 'full'] as const;
+const DEFAULT_ROLE_CHOICES = ['readonly', 'contributor', 'edit', 'full'] as const;
 type DefaultRole = (typeof DEFAULT_ROLE_CHOICES)[number];
 function parseDefaultRole(raw: string | undefined): DefaultRole {
   const v = (raw ?? '').trim().toLowerCase();
