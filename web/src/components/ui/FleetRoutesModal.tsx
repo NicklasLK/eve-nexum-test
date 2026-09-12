@@ -127,7 +127,7 @@ export function FleetRoutesModal({ onClose }: { onClose: () => void }) {
 
   return createPortal(
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" style={{ maxWidth: 'min(1120px, 96vw)', width: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="modal" style={{ maxWidth: 'min(1800px, 96vw)', width: '96vw', maxHeight: '94vh', display: 'flex', flexDirection: 'column' }}>
         <div className="modal__header">
           <h2 className="modal__title">{t('fleetRoutes.title')}</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -368,7 +368,7 @@ function RouteMap({ route, coords }: { route: Route; coords: Record<number, { x:
   );
   return (
     <div style={{ position: 'relative', borderRadius: 6, overflow: 'hidden' }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 170, background: '#0d1117', display: 'block' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', maxHeight: '45vh', background: '#0d1117', display: 'block' }}>
         {sp.slice(1).map((p, i) => {
           const m = route.segments[i].method;
           return <line key={i} x1={sp[i].X} y1={sp[i].Y} x2={p.X} y2={p.Y} stroke={METHOD_COLOR[m]} strokeWidth={2} opacity={0.9}
