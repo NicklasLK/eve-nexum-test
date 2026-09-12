@@ -1012,14 +1012,21 @@ The Thera / Turnur feed comes from EvE-Scout's public API. If the server log sho
 `[scout] Scout fetch failed: Error: eve-scout unreachable (UND_ERR_CONNECT_TIMEOUT)`,
 your host cannot open a connection to `api.eve-scout.com` at all (it sits behind
 Azure Front Door, and some hosting networks are dropped at the TCP level — this
-is not an IPv6 or DNS problem). Relay the feed through an edge that can reach
-it: [`deploy/cloudflare/eve-scout-relay.worker.js`](deploy/cloudflare/eve-scout-relay.worker.js)
-is a Cloudflare Worker that serves the identical JSON with a 60 s cache. Deploy
-it on a hostname you control and point the server at it:
+is not an IPv6 or DNS problem). Relay the feed through something that can reach
+it and point the server at the relay with `EVE_SCOUT_URL`:
 
-```dotenv
-EVE_SCOUT_URL=https://scout-relay.example.com/v2/public/signatures
-```
+- [`deploy/scout-relay/`](deploy/scout-relay/) is a dependency-free Python relay
+  (standard library only) to run as a small private service next to Nexum, e.g.
+  on a container network that can reach eve-scout. It serves the identical JSON
+  with a 60 s cache and logs its upstream fetches, starting with a warm-up at boot:
+  ```dotenv
+  EVE_SCOUT_URL=http://scout-relay.internal:8080/v2/public/signatures
+  ```
+- [`deploy/cloudflare/eve-scout-relay.worker.js`](deploy/cloudflare/eve-scout-relay.worker.js)
+  is the same idea as a Cloudflare Worker, for when nothing on your host can reach it:
+  ```dotenv
+  EVE_SCOUT_URL=https://scout-relay.example.com/v2/public/signatures
+  ```
 
 A successful refresh logs `[scout] loaded N Thera/Turnur connections from eve-scout`.
 
