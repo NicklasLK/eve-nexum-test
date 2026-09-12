@@ -67,6 +67,15 @@ let adjacency:  Map<number, number[]>                          | null = null;
 let systemInfo: Map<number, { name: string; security: number }> | null = null;
 
 /**
+ * The loaded stargate graph, shared read-only with other planners (the fleet
+ * route planner layers its own edges on top). Never mutate the returned maps.
+ */
+export function getBaseGraph(): { adjacency: Map<number, number[]>; systemInfo: Map<number, { name: string; security: number }> } {
+  if (!adjacency || !systemInfo) throw new Error('Route graph not loaded');
+  return { adjacency, systemInfo };
+}
+
+/**
  * Build the in-memory stargate adjacency list from map_stargates, and load
  * { name, security } for every system that participates in the graph.
  * Called once at server startup.

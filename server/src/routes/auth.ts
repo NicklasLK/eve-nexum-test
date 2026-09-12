@@ -8,6 +8,7 @@ import { createLogger } from '../utils/logger.js';
 import { esiFetch } from '../utils/esi.js';
 import { refreshStandingsForUser } from '../services/standings.js';
 import { syncCorpStructures } from '../services/structureSync.js';
+import { syncStructureReaders } from '../services/structureReaderSync.js';
 import { isLoginPermitted, standingsPermitLogin } from '../services/accessGrants.js';
 import { seedDemoMap } from '../services/demoMap.js';
 
@@ -189,6 +190,94 @@ async function completeWalletReaderAuth(code: string, res: Response): Promise<vo
   res.redirect(`${FRONTEND_URL}/admin?wallet=connected`);
 }
 
+// GET /auth/structure-reader — admin-only authorisation of a jump-bridge
+// structure reader: a character (normally an alt) with Station Manager or
+// Director in the corp that owns the Ansiblex gates. Like the wallet reader,
+// the token lives in its own table so an ordinary login of the same character
+// can never replace it. The scopes are all in the base set already, so no
+// EVE-application change is needed.
+const STRUCTURE_READER_SCOPES = [
+  'esi-corporations.read_structures.v1',
+  'esi-characters.read_corporation_roles.v1',
+  'esi-universe.read_structures.v1',
+];
+authRouter.get('/structure-reader', async (req, res) => {
+  const role = req.session.role;
+  if (!req.session.userId || !(role === 'admin' || role === 'alliance_admin')) {
+    res.redirect(`${FRONTEND_URL}?error=not_authenticated`);
+    return;
+  }
+  req.session.structureReaderFlow = true;
+  const state = randomBytes(32).toString('hex');
+  req.session.oauthState = state;
+  const params = new URLSearchParams({
+    response_type: 'code',
+    redirect_uri:  CALLBACK_URL,
+    client_id:     CLIENT_ID,
+    scope:         STRUCTURE_READER_SCOPES.join(' '),
+    state,
+  });
+  req.session.save((err) => {
+    if (err) { res.status(500).json({ error: 'Session error' }); return; }
+    res.redirect(`${EVE_AUTH_URL}?${params}`);
+  });
+});
+
+// Finish a structure-reader authorisation: any character may be the reader
+// (the admin picks it at the SSO screen); whether it can actually list corp
+// structures is checked by the first sync and reported on the admin page.
+async function completeStructureReaderAuth(code: string, addedBy: number, res: Response): Promise<void> {
+  const tokenRes = await fetch(EVE_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: `Basic ${Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64')}`,
+    },
+    body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: CALLBACK_URL }),
+  });
+  if (!tokenRes.ok) { res.redirect(`${FRONTEND_URL}/?reader_error=token_exchange#/admin/bridges`); return; }
+
+  const tokens = await tokenRes.json() as { access_token: string; refresh_token: string };
+  const claims = JSON.parse(
+    Buffer.from(tokens.access_token.split('.')[1], 'base64url').toString('utf8'),
+  ) as { sub: string; name?: string; scp?: string | string[] };
+  const characterId = parseInt(claims.sub.split(':')[2], 10);
+  const scopes = Array.isArray(claims.scp) ? claims.scp : (claims.scp ? [claims.scp] : []);
+  if (!scopes.includes('esi-corporations.read_structures.v1')) {
+    res.redirect(`${FRONTEND_URL}/?reader_error=missing_scope#/admin/bridges`);
+    return;
+  }
+
+  // Corp id/name now, so the admin table is meaningful before the first sync.
+  let corpId: number | null = null, corpName = '';
+  try {
+    const cr = await esiFetch(`https://esi.evetech.net/latest/characters/${characterId}/`);
+    if (cr.ok) {
+      corpId = ((await cr.json()) as { corporation_id?: number }).corporation_id ?? null;
+      if (corpId) {
+        const nr = await esiFetch(`https://esi.evetech.net/latest/corporations/${corpId}/`);
+        if (nr.ok) corpName = ((await nr.json()) as { name?: string }).name ?? '';
+      }
+    }
+  } catch { /* the sync fills these in */ }
+
+  await db.query(
+    `INSERT INTO structure_readers (character_id, character_name, corp_id, corp_name, refresh_token, scopes, added_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (character_id) DO UPDATE
+       SET refresh_token = EXCLUDED.refresh_token,
+           character_name = EXCLUDED.character_name,
+           corp_id = COALESCE(EXCLUDED.corp_id, structure_readers.corp_id),
+           corp_name = CASE WHEN EXCLUDED.corp_name <> '' THEN EXCLUDED.corp_name ELSE structure_readers.corp_name END,
+           scopes = EXCLUDED.scopes,
+           last_error = NULL`,
+    [characterId, claims.name ?? '', corpId, corpName, encryptToken(tokens.refresh_token), scopes.join(' '), addedBy],
+  );
+  // First read right away, so the admin sees gates (or the reason) on return.
+  void syncStructureReaders().catch((err) => log.warn('reader first sync failed:', err));
+  res.redirect(`${FRONTEND_URL}/?reader=connected#/admin/bridges`);
+}
+
 // GET /auth/callback  — EVE SSO returns here
 authRouter.get('/callback', async (req, res) => {
   const { code, state } = req.query as Record<string, string>;
@@ -205,6 +294,11 @@ authRouter.get('/callback', async (req, res) => {
   if (req.session.walletReaderFlow) {
     delete req.session.walletReaderFlow;
     await completeWalletReaderAuth(code, res);
+    return;
+  }
+  if (req.session.structureReaderFlow) {
+    delete req.session.structureReaderFlow;
+    await completeStructureReaderAuth(code, req.session.userId!, res);
     return;
   }
 

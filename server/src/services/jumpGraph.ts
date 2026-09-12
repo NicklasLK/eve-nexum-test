@@ -79,6 +79,13 @@ async function ensureLoaded(): Promise<void> {
   await loading;
 }
 
+/** Every LS/NS (non-Pochven) system with coordinates — the set a capital can
+ *  bridge to. Shared read-only with the fleet route planner. */
+export async function getJumpSystems(): Promise<ReadonlyArray<{ id: number; name: string; x: number; y: number; z: number }>> {
+  await ensureLoaded();
+  return systems ?? [];
+}
+
 /** Systems in memory yet? (0 = coords not backfilled — same gate as jump-range). */
 export async function jumpGraphSize(): Promise<number> {
   await ensureLoaded();
