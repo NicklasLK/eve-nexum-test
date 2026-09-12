@@ -1006,7 +1006,24 @@ docker compose logs server | grep -E '\[(auth|maps|admin|standings|ghost-sites|s
 
 In local-dev mode (`npm run dev` in `server/` and `web/` separately) there are no containers — logs stream straight to the terminal you started them from. Browser-side errors appear in DevTools Console; network failures show in DevTools Network. The Vite dev server proxies `/api` and `/auth` to the local API, so a 502 in the browser network tab means the API process exited.
 
-### 5. Health-check shortcuts
+### 5. Thera / Turnur exits missing (eve-scout unreachable)
+
+The Thera / Turnur feed comes from EvE-Scout's public API. If the server log shows
+`[scout] Scout fetch failed: Error: eve-scout unreachable (UND_ERR_CONNECT_TIMEOUT)`,
+your host cannot open a connection to `api.eve-scout.com` at all (it sits behind
+Azure Front Door, and some hosting networks are dropped at the TCP level — this
+is not an IPv6 or DNS problem). Relay the feed through an edge that can reach
+it: [`deploy/cloudflare/eve-scout-relay.worker.js`](deploy/cloudflare/eve-scout-relay.worker.js)
+is a Cloudflare Worker that serves the identical JSON with a 60 s cache. Deploy
+it on a hostname you control and point the server at it:
+
+```dotenv
+EVE_SCOUT_URL=https://scout-relay.example.com/v2/public/signatures
+```
+
+A successful refresh logs `[scout] loaded N Thera/Turnur connections from eve-scout`.
+
+### 6. Health-check shortcuts
 
 ```bash
 # Count the rows the server should have populated at boot
