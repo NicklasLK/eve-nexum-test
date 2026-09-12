@@ -899,6 +899,7 @@
     "nRoutes_other": "{{count}} routes",
     "fleetOf": "fleet of {{ship}}s",
     "sortedByJumps": "Sorted by jumps",
+    "selectedRoute": "Selected route · #{{n}} · {{jumps}} jumps",
     "nJumps_one": "{{count}} jump",
     "nJumps_other": "{{count}} jumps",
     "nGates_one": "{{count}} gate",

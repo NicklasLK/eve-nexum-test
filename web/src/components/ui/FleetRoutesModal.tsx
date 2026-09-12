@@ -195,11 +195,18 @@ export function FleetRoutesModal({ onClose }: { onClose: () => void }) {
                   </span>
                   <span style={{ fontSize: 12, color: 'var(--text-subtle)' }} title={sourcesTitle(result.sources)}>{t('fleetRoutes.sortedByJumps')}</span>
                 </div>
+                {route && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-subtle)', marginBottom: 6 }}>
+                      {t('fleetRoutes.selectedRoute', { n: route.id, jumps: route.totalJumps })}
+                    </div>
+                    <RouteString route={route} shipClass={shipClass} />
+                  </div>
+                )}
                 {result.routes.map((r, i) => (
                   <RouteCard key={r.id} route={r} selected={i === selected} shipClass={shipClass} onSelect={() => setSelected(i)}
                     onSend={() => sendToAutopilot(r)} sending={sending} />
                 ))}
-                {route && <RouteString route={route} shipClass={shipClass} />}
               </>
             )}
             {!result && !drawer && !error && !loading && (
@@ -378,9 +385,9 @@ function RouteString({ route, shipClass }: { route: Route; shipClass: ShipClass 
               <div onMouseEnter={enter(null, sys)} onMouseMove={move} onMouseLeave={leave}
                 style={{ flex: '0 0 auto', width: 72, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'help' }}>
                 <span style={{
-                  width: 14, height: 14, borderRadius: '50%', boxSizing: 'border-box', background: truesecColor(sys.security),
-                  border: `2px solid ${i === 0 ? '#3ddc84' : i === last ? '#e69f00' : sys.wspace ? '#b06ad0' : '#56b4e9'}`,
-                  boxShadow: i === 0 || i === last ? '0 0 0 2px rgba(255,255,255,0.08)' : undefined,
+                  width: i === 0 || i === last ? 16 : 13, height: i === 0 || i === last ? 16 : 13, marginTop: i === 0 || i === last ? 0 : 1.5,
+                  borderRadius: '50%', boxSizing: 'border-box', background: truesecColor(sys.security),
+                  boxShadow: '0 0 0 1px rgba(0,0,0,0.35)',
                 }} />
                 <span style={{ fontSize: 11, marginTop: 4, maxWidth: 72, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: i === 0 || i === last ? 'var(--text)' : 'var(--text-subtle)', fontWeight: i === 0 || i === last ? 600 : 400 }}>{sys.name}</span>
               </div>
