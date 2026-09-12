@@ -7,14 +7,13 @@ import {
   LinkBreakIcon, BroomIcon, TimerIcon,
   UsersIcon, UsersThreeIcon, StackIcon, ArrowsMergeIcon, ArrowsClockwiseIcon, LockIcon, ShieldCheckIcon,
   CardsIcon, WaveformIcon, BuildingsIcon, SparkleIcon, ChartLineIcon, FlagBannerIcon, SwordIcon, HandshakeIcon,
-  PathIcon, StarIcon, SnowflakeIcon, LightningIcon, WarningIcon, NavigationArrowIcon, TargetIcon, PlanetIcon, MapPinIcon, BroadcastIcon, BellRingingIcon, DiscordLogoIcon, BinocularsIcon,
+  PathIcon, StarIcon, SnowflakeIcon, LightningIcon, WarningIcon, NavigationArrowIcon, TargetIcon, PlanetIcon, MapPinIcon, BroadcastIcon, BellRingingIcon, BinocularsIcon,
   CommandIcon, HouseIcon, SkullIcon, ChartBarIcon, PulseIcon, EyeIcon, SidebarIcon, EyeglassesIcon,
   SquaresFourIcon, UserGearIcon, TableIcon, ChartDonutIcon, ClockIcon, ClipboardTextIcon, TagIcon, IdentificationCardIcon,
   KeyIcon,
   LineSegmentsIcon,
 } from '../../icons';
 import { apiUrl } from '../../api/client';
-import { DISCORD_INVITE_URL } from '../../data/links';
 import { SUPPORTED_LANGUAGES, LANGUAGE_NAMES } from '../../i18n';
 import { DemoMap } from './DemoMap';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -366,15 +365,6 @@ export function LandingPage() {
               </p>
             </>
           )}
-          <a
-            href={DISCORD_INVITE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="landing__discord-btn"
-          >
-            <DiscordLogoIcon size={20} weight="fill" />
-            <span>{t('landing.cta.joinDiscord')}</span>
-          </a>
           <a href="/help/" className="landing__switch-link">{t('landing.helpLink')}</a>
           <a href="/help/#guides" className="landing__switch-link">{t('landing.guidesLink')}</a>
         </div>
@@ -447,23 +437,6 @@ export function LandingPage() {
           </p>
           <a href="/compare/" className="landing__compare-link">
             {t('landing.compareLink')}
-          </a>
-        </section>
-
-        {/* ── Discord CTA ──────────────────────────────────── */}
-        <section className="landing__section landing__compare">
-          <h2 className="landing__section-title">{t('landing.sections.discordCta')}</h2>
-          <p className="landing__section-body">
-            {t('landing.discordCtaBody')}
-          </p>
-          <a
-            href={DISCORD_INVITE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="landing__discord-btn"
-          >
-            <DiscordLogoIcon size={20} weight="fill" />
-            <span>{t('landing.cta.joinDiscord')}</span>
           </a>
         </section>
 

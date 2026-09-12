@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -81,17 +81,35 @@ export function FleetRoutesModal({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [sending, setSending] = useState(false);
+  // Bumped when the drawer changes bridges/exclusions, so the plan refreshes.
+  const [replanTick, setReplanTick] = useState(0);
+  const optsKey = JSON.stringify(opts);
+  const seq = useRef(0);
 
-  const plan = async () => {
-    if (!from || !to) return;
-    setLoading(true); setError(null);
-    try {
-      const r = await api<PlanResp>('/api/fleet-routes', { method: 'POST', body: JSON.stringify({ from: from.id, to: to.id, options: opts, maxRoutes: 6 }) });
-      setResult(r); setSelected(0);
-      if (!r.routes.length) setError(t('fleetRoutes.errNoRoute'));
-    } catch { setError(t('fleetRoutes.errFailed')); }
-    finally { setLoading(false); }
-  };
+  // Plan as soon as both ends are picked, and again whenever an option
+  // changes — no button. Debounced a little so a burst of clicks on the
+  // option checkboxes becomes one request; late replies are dropped.
+  useEffect(() => {
+    // Deliberate: clears this pane's own state when its inputs go away.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!from || !to) { setResult(null); setError(null); return; }
+    const mine = ++seq.current;
+    const fromId = from.id, toId = to.id, options = JSON.parse(optsKey) as Options;
+    const handle = setTimeout(async () => {
+      setLoading(true); setError(null);
+      try {
+        const r = await api<PlanResp>('/api/fleet-routes', { method: 'POST', body: JSON.stringify({ from: fromId, to: toId, options, maxRoutes: 6 }) });
+        if (mine !== seq.current) return;
+        setResult(r); setSelected(0);
+        if (!r.routes.length) setError(t('fleetRoutes.errNoRoute'));
+      } catch {
+        if (mine === seq.current) setError(t('fleetRoutes.errFailed'));
+      } finally {
+        if (mine === seq.current) setLoading(false);
+      }
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [from, to, optsKey, replanTick, t]);
 
   const sendToAutopilot = async (route: Route) => {
     setSending(true);
@@ -116,7 +134,7 @@ export function FleetRoutesModal({ onClose }: { onClose: () => void }) {
             <button className="icon-btn" onClick={onClose} title={t('actions.close')}><XIcon size={14} weight="bold" /></button>
           </div>
         </div>
-        <div className="modal__body" style={{ display: 'flex', gap: 16, overflow: 'auto', minHeight: 0, flex: 1 }}>
+        <div className="modal__body" style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: 16, overflow: 'auto', minHeight: 0, flex: 1 }}>
           {/* Options column */}
           <div style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <SystemField label={t('fleetRoutes.from')} value={from} onPick={setFrom} />
@@ -157,9 +175,6 @@ export function FleetRoutesModal({ onClose }: { onClose: () => void }) {
             </Section>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-              <button type="button" className="btn btn--primary" disabled={!from || !to || loading} onClick={plan}>
-                {loading ? t('fleetRoutes.planning') : t('fleetRoutes.plan')}
-              </button>
               <button type="button" className="btn btn--ghost" onClick={() => setDrawer((d) => !d)}>
                 {drawer ? t('fleetRoutes.hideMine') : t('fleetRoutes.mine')}
               </button>
@@ -168,8 +183,9 @@ export function FleetRoutesModal({ onClose }: { onClose: () => void }) {
 
           {/* Results column */}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {drawer && <MyBridgesDrawer onChanged={() => { if (result) void plan(); }} />}
-            {error && <div style={{ color: 'var(--cv-conn-expired)', fontSize: 13 }}>{error}</div>}
+            {drawer && <MyBridgesDrawer onChanged={() => setReplanTick((n) => n + 1)} />}
+            {loading && <div style={{ fontSize: 12, color: 'var(--text-subtle)' }}>{t('fleetRoutes.planning')}</div>}
+            {error && !loading && <div style={{ color: 'var(--cv-conn-expired)', fontSize: 13 }}>{error}</div>}
             {result && result.routes.length > 0 && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
@@ -186,7 +202,7 @@ export function FleetRoutesModal({ onClose }: { onClose: () => void }) {
                 {route && <RouteMap route={route} coords={result.coords} />}
               </>
             )}
-            {!result && !drawer && !error && (
+            {!result && !drawer && !error && !loading && (
               <div className="map-sidebar__hint" style={{ margin: 0 }}>{t('fleetRoutes.empty')}</div>
             )}
           </div>

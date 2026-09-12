@@ -40,7 +40,6 @@ import {
   ChartBarIcon,
   ClockCountdownIcon,
   ColumnsIcon,
-  DiscordLogoIcon,
   DotsSixVerticalIcon,
   FootprintsIcon,
   GraphIcon,
@@ -61,7 +60,6 @@ import {
 import type { Icon as PhosphorIcon } from '../../icons';
 import { UpdateIndicator } from './UpdateIndicator';
 import { charPortrait, typeIcon } from '../../utils/eveImages';
-import { DISCORD_INVITE_URL } from '../../data/links';
 
 interface EveStatus {
   players:    number;
@@ -592,18 +590,6 @@ export function Toolbar() {
           aria-label={t('toolbar.help')}
         >
           <QuestionIcon size={18} weight="regular" />
-        </a>
-
-        <a
-          className="toolbar__toggle toolbar__toggle--prominent toolbar__discord"
-          href={DISCORD_INVITE_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-tooltip={t('actions.joinDiscord')}
-          aria-label={t('actions.joinDiscord')}
-        >
-          <DiscordLogoIcon size={18} weight="fill" color="#5865F2" />
-          <span>{t('toolbar.discord')}</span>
         </a>
 
         <button
