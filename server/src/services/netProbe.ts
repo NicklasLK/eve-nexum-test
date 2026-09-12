@@ -23,17 +23,30 @@ function tcpProbe(address: string, family: number): Promise<string> {
   });
 }
 
-function tlsProbe(address: string, family: number, servername: string): Promise<string> {
+// Handshake variants, so a stall can be tied to one property of the
+// ClientHello (protocol version, SNI, size, ALPN) rather than "TLS".
+const TLS_VARIANTS: { label: string; opts: tls.ConnectionOptions & { noSni?: boolean } }[] = [
+  { label: 'default',          opts: {} },
+  { label: 'tls1.2-only',      opts: { maxVersion: 'TLSv1.2' } },
+  { label: 'tls1.3-only',      opts: { minVersion: 'TLSv1.3' } },
+  { label: 'no-sni',           opts: { noSni: true } },
+  { label: 'tiny-hello',       opts: { minVersion: 'TLSv1.3', ciphers: 'TLS_AES_128_GCM_SHA256', ecdhCurve: 'X25519' } },
+  { label: 'alpn-http/1.1',    opts: { ALPNProtocols: ['http/1.1'] } },
+  { label: 'alpn-h2',          opts: { ALPNProtocols: ['h2', 'http/1.1'] } },
+];
+
+function tlsProbe(address: string, family: number, servername: string, variant: tls.ConnectionOptions & { noSni?: boolean } = {}): Promise<string> {
   return new Promise((resolve) => {
     const t0 = Date.now();
     // tls.connect has no `family` option: open the TCP socket ourselves so the
     // address family is pinned, then hand it to TLS (it waits for 'connect').
     const raw = net.connect({ host: address, port: 443, family });
     raw.once('error', (e: NodeJS.ErrnoException) => { resolve(`tls ERROR (tcp) ${e.code ?? e.message} after ${Date.now() - t0}ms`); });
-    const sock = tls.connect({ socket: raw, servername });
+    const { noSni, ...tlsOpts } = variant;
+    const sock = tls.connect({ socket: raw, ...(noSni ? {} : { servername }), ...tlsOpts });
     sock.setTimeout(STEP_TIMEOUT_MS);
     sock.once('secureConnect', () => {
-      const out = `tls ok ${Date.now() - t0}ms ${sock.getProtocol() ?? ''} ${sock.getCipher()?.name ?? ''} authorized=${sock.authorized}`;
+      const out = `tls ok ${Date.now() - t0}ms ${sock.getProtocol() ?? ''} ${sock.getCipher()?.name ?? ''} alpn=${sock.alpnProtocol || '-'} authorized=${sock.authorized}`;
       sock.destroy(); resolve(out);
     });
     sock.once('timeout', () => { sock.destroy(); resolve(`tls TIMEOUT after ${Date.now() - t0}ms`); });
@@ -56,7 +69,9 @@ export async function runNetProbe(spec: string): Promise<void> {
     log.info(`${host}: lookup ${Date.now() - t0}ms -> ${uniq.map((a) => a.address).join(', ')}`);
     for (const a of uniq) {
       log.info(`${host} [${a.address}] ${await tcpProbe(a.address, a.family)}`);
-      log.info(`${host} [${a.address}] ${await tlsProbe(a.address, a.family, host)}`);
+      for (const v of TLS_VARIANTS) {
+        log.info(`${host} [${a.address}] ${v.label}: ${await tlsProbe(a.address, a.family, host, v.opts)}`);
+      }
     }
     const t1 = Date.now();
     try {
