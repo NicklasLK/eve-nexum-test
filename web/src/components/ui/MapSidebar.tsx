@@ -31,6 +31,7 @@ import { JumpRangePane } from "./JumpRangePane";
 import { AnnouncerSection } from "./AnnouncerSection";
 import { MapSharesSection } from "./MapSharesSection";
 import { MergeMapModal } from "./MergeMapModal";
+import { AddRegionModal } from "./AddRegionModal";
 import { CustomIntelBlock } from "./CustomIntelBlock";
 import { PatchNotesModal } from "./PatchNotesModal";
 import { ContentFilterBlock } from "./ContentFilterBlock";
@@ -971,6 +972,10 @@ export function MapSidebar() {
   // positions (SDE pos2d). The server repositions + broadcasts, so open clients
   // move live; wormhole/unresolved/locked nodes are left untouched.
   const [tidyingLayout, setTidyingLayout] = useState(false);
+  // "Add region" — append another K-space region (systems + stargates, incl.
+  // the regional gates to what's already here) to the active map. Reshapes the
+  // map, so contributors — who may not — don't get the button at all.
+  const [addRegionOpen, setAddRegionOpen] = useState(false);
   const tidyLayout = async () => {
     const mapId = useMapStore.getState().activeMapId;
     if (!mapId) return;
@@ -1352,6 +1357,15 @@ export function MapSidebar() {
               >
                 {reclassifying ? t("mapSidebar.reclassifyGatesBusy") : t("mapSidebar.reclassifyGates")}
               </button>
+              {user?.role !== "contributor" && (
+                <button
+                  className="map-sidebar__action"
+                  onClick={() => setAddRegionOpen(true)}
+                  data-tooltip={t("mapSidebar.addRegionTooltip")}
+                >
+                  {t("mapSidebar.addRegion")}
+                </button>
+              )}
               <button
                 className="map-sidebar__action"
                 onClick={tidyLayout}
@@ -1369,6 +1383,7 @@ export function MapSidebar() {
                 {untangling ? t("mapSidebar.untangleLayoutBusy") : t("mapSidebar.untangleLayout")}
               </button>
               <LazyWhSweepToggle />
+              {addRegionOpen && <AddRegionModal onClose={() => setAddRegionOpen(false)} />}
             </>
           )}
         </CollapsibleSection>

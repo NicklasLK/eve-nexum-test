@@ -1196,6 +1196,79 @@ mapsRouter.post('/:mapId/copy', async (req, res) => {
   }
 });
 
+// ── Region seeding layout ────────────────────────────────────────────────────
+// Lay a region's systems out from CCP's 2D star-map projection (position2D) so
+// stargate-connected systems sit adjacent the way the in-game map / Dotlan show
+// them. Scale is derived from the median nearest-neighbour distance → a target
+// on-screen gap, so typical adjacent systems land ~REGION_TARGET_GAP px apart
+// regardless of region. Y is flipped so north is up. Returns top-left node
+// positions with the block's origin at (0,0), in input order.
+//
+// A minimum gap is then enforced between nodes. System nodes are much wider
+// than they are tall, so a single circular distance can't space both axes — it
+// leaves horizontal neighbours touching while vertical ones look fine. Instead
+// we separate their *bounding boxes*, keeping at least GRID*2 (two snap-grid
+// squares) of clear space on whichever axis two boxes are closest, resolving
+// each overlap along its shallower axis. Only the too-close pairs move; the
+// rest of the projected layout is preserved.
+//
+// Shared by /from-region (new map) and /:mapId/seed-region (append to a map).
+const REGION_TARGET_GAP = 220; // px between typical adjacent systems (≈ node width + a 2-square gap)
+const REGION_GRID       = 20;  // matches the canvas snapGrid={[20,20]}
+const REGION_NODE_W     = 200; // assumed rendered node width  (min-width 150 + padding + content)
+const REGION_NODE_H     = 120; // assumed rendered node height
+const REGION_MIN_X      = REGION_NODE_W + REGION_GRID * 2; // ≥2 grid squares of horizontal gap
+const REGION_MIN_Y      = REGION_NODE_H + REGION_GRID * 2; // ≥2 grid squares of vertical gap
+// Clear space between an appended region block and everything already on the map.
+const REGION_APPEND_GAP = 400;
+
+function projectRegionLayout(pts: { x: number; y: number }[]): { x: number; y: number }[] {
+  if (pts.length === 0) return [];
+  const minX = Math.min(...pts.map((p) => p.x));
+  const maxY = Math.max(...pts.map((p) => p.y));
+  let medianNN = 1;
+  if (pts.length > 1) {
+    const nn = pts.map((a, i) => {
+      let best = Infinity;
+      for (let j = 0; j < pts.length; j++) {
+        if (j === i) continue;
+        const dx = a.x - pts[j].x, dy = a.y - pts[j].y;
+        const d = dx * dx + dy * dy;
+        if (d < best) best = d;
+      }
+      return Math.sqrt(best);
+    }).sort((a, b) => a - b);
+    medianNN = nn[Math.floor(nn.length / 2)] || 1;
+  }
+  const scale = REGION_TARGET_GAP / (medianNN > 0 ? medianNN : 1);
+  // Project to screen coordinates (flip Y for north-up).
+  const coords = pts.map((p) => ({ x: (p.x - minX) * scale, y: (maxY - p.y) * scale }));
+  const n = coords.length;
+  for (let pass = 0; pass < 20; pass++) {
+    let moved = false;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dx = coords[j].x - coords[i].x;
+        const dy = coords[j].y - coords[i].y;
+        const ox = REGION_MIN_X - Math.abs(dx); // >0 ⇒ boxes overlap (incl. gap) in X
+        const oy = REGION_MIN_Y - Math.abs(dy); // >0 ⇒ boxes overlap (incl. gap) in Y
+        if (ox <= 0 || oy <= 0) continue;      // already clear on at least one axis
+        // Push apart along the shallower axis (smallest move that separates them).
+        if (ox <= oy) {
+          const s = (dx < 0 ? -1 : 1) * (ox / 2); // dx===0 → push +x
+          coords[i].x -= s; coords[j].x += s;
+        } else {
+          const s = (dy < 0 ? -1 : 1) * (oy / 2); // dy===0 → push +y
+          coords[i].y -= s; coords[j].y += s;
+        }
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  return coords;
+}
+
 // POST /api/maps/from-region — create a new map pre-populated with an entire
 // K-space region: every system positioned by its EVE coordinates (Dotlan-style
 // projection of x/z) plus all intra-region stargate links. Blank-map creation
@@ -1258,74 +1331,8 @@ mapsRouter.post('/from-region', async (req, res) => {
   const regionName = regionRes.rows[0]?.name ?? 'Region';
   const mapName    = String(typeof body.name === 'string' && body.name.trim() ? body.name : regionName).slice(0, MAX_MAP_NAME_LEN);
 
-  // Lay out from CCP's 2D star-map projection (position2D) so stargate-connected
-  // systems sit adjacent the way the in-game map / Dotlan show them. Scale is
-  // derived from the median nearest-neighbour distance → a target on-screen gap,
-  // so typical adjacent systems land ~TARGET_GAP px apart regardless of region.
-  // Y is flipped so north is up.
-  const pts = sysRes.rows.map((s) => ({ x: s.x2 as number, y: s.y2 as number }));
-  const minX = Math.min(...pts.map((p) => p.x));
-  const maxY = Math.max(...pts.map((p) => p.y));
-
-  const TARGET_GAP = 220; // px between typical adjacent systems (≈ node width + a 2-square gap)
-  let medianNN = 1;
-  if (pts.length > 1) {
-    const nn = pts.map((a, i) => {
-      let best = Infinity;
-      for (let j = 0; j < pts.length; j++) {
-        if (j === i) continue;
-        const dx = a.x - pts[j].x, dy = a.y - pts[j].y;
-        const d = dx * dx + dy * dy;
-        if (d < best) best = d;
-      }
-      return Math.sqrt(best);
-    }).sort((a, b) => a - b);
-    medianNN = nn[Math.floor(nn.length / 2)] || 1;
-  }
-  const scale = TARGET_GAP / (medianNN > 0 ? medianNN : 1);
-
-  // Project to screen coordinates (flip Y for north-up).
-  const coords = sysRes.rows.map((s) => ({
-    x: ((s.x2 as number) - minX) * scale,
-    y: (maxY - (s.y2 as number)) * scale,
-  }));
-
-  // Enforce a minimum gap between nodes. System nodes are much wider than they
-  // are tall, so a single circular distance can't space both axes — it leaves
-  // horizontal neighbours touching while vertical ones look fine. Instead we
-  // separate their *bounding boxes* (positions are top-left corners), keeping at
-  // least GRID*2 (two snap-grid squares) of clear space on whichever axis two
-  // boxes are closest, resolving each overlap along its shallower axis. Only the
-  // too-close pairs move; the rest of the projected layout is preserved.
-  const GRID = 20;          // matches the canvas snapGrid={[20,20]}
-  const NODE_W = 200;       // assumed rendered node width  (min-width 150 + padding + content)
-  const NODE_H = 120;       // assumed rendered node height
-  const MIN_X = NODE_W + GRID * 2; // ≥2 grid squares of horizontal gap
-  const MIN_Y = NODE_H + GRID * 2; // ≥2 grid squares of vertical gap
-  const n = coords.length;
-  for (let pass = 0; pass < 20; pass++) {
-    let moved = false;
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const dx = coords[j].x - coords[i].x;
-        const dy = coords[j].y - coords[i].y;
-        const ox = MIN_X - Math.abs(dx); // >0 ⇒ boxes overlap (incl. gap) in X
-        const oy = MIN_Y - Math.abs(dy); // >0 ⇒ boxes overlap (incl. gap) in Y
-        if (ox <= 0 || oy <= 0) continue; // already clear on at least one axis
-        // Push apart along the shallower axis (smallest move that separates them).
-        if (ox <= oy) {
-          const s = (dx < 0 ? -1 : 1) * (ox / 2); // dx===0 → push +x
-          coords[i].x -= s; coords[j].x += s;
-        } else {
-          const s = (dy < 0 ? -1 : 1) * (oy / 2); // dy===0 → push +y
-          coords[i].y -= s; coords[j].y += s;
-        }
-        moved = true;
-      }
-    }
-    if (!moved) break;
-  }
-
+  // Star-map projection + min-gap pass, shared with /:mapId/seed-region.
+  const coords = projectRegionLayout(sysRes.rows.map((s) => ({ x: s.x2 as number, y: s.y2 as number })));
   const client = await db.connect();
   try {
     await client.query('BEGIN');
@@ -1402,6 +1409,147 @@ mapsRouter.post('/from-region', async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     log.error('map from-region failed:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/maps/:mapId/seed-region — add a whole K-space region to an EXISTING
+// map: the /from-region seed, but appended. Systems already on the map are
+// skipped (matched by eve_system_id); the new ones get the same star-map
+// projection and are placed as a block to the right of everything already on
+// the canvas ("Tidy layout" packs the regions compactly afterwards if wanted).
+// Stargates are wired across the WHOLE map, so the regional gates joining the
+// new region to one seeded earlier get drawn too — but only gates touching a
+// newly added system are created, so a gate the users removed between two
+// existing systems stays removed. Reshapes the map → requireMapWrite (role +
+// lock), exactly like a manual system add.
+mapsRouter.post('/:mapId/seed-region', async (req, res) => {
+  const { mapId } = req.params;
+  const access = await requireMapWrite(res, mapId, req);
+  if (!access) return;
+  const regionId = Number((req.body as { regionId?: unknown }).regionId);
+  if (!Number.isInteger(regionId)) { res.status(400).json({ error: 'regionId is required' }); return; }
+
+  const [sysRes, regionRes, existingRes] = await Promise.all([
+    db.query<{
+      id: number; name: string; systemClass: string | null; effect: string | null;
+      statics: string[]; x2: number | null; y2: number | null;
+    }>(
+      `SELECT id, name, class AS "systemClass", effect, statics,
+              pos2d_x AS "x2", pos2d_y AS "y2"
+         FROM solar_systems WHERE region_id = $1`,
+      [regionId],
+    ),
+    db.query<{ name: string }>(`SELECT name FROM map_regions WHERE id = $1`, [regionId]),
+    db.query<{ id: string; eveId: number | null; x: number | null; y: number | null }>(
+      `SELECT id, eve_system_id AS "eveId", position_x AS x, position_y AS y
+         FROM map_systems WHERE map_id = $1`,
+      [mapId],
+    ),
+  ]);
+  if (sysRes.rows.length === 0) { res.status(404).json({ error: 'Region not found or has no systems' }); return; }
+
+  const idByEve = new Map<number, string>();
+  for (const e of existingRes.rows) if (e.eveId != null) idByEve.set(e.eveId, e.id);
+  const fresh = sysRes.rows.filter((s) => !idByEve.has(s.id));
+  if (existingRes.rows.length + fresh.length > MAX_IMPORT_SYSTEMS) {
+    res.status(413).json({ error: `Map would exceed ${MAX_IMPORT_SYSTEMS} systems` }); return;
+  }
+  if (fresh.some((s) => s.x2 === null || s.y2 === null)) {
+    res.status(503).json({ error: 'Region coordinates not seeded yet — run `npm run backfill-coords` (or re-run setup-db).' });
+    return;
+  }
+  const regionName = regionRes.rows[0]?.name ?? 'Region';
+
+  // Lay the new region out on its own, then shift the block clear of the
+  // current content: right of the rightmost existing node, top-aligned with the
+  // topmost. Every new x is at or beyond that edge, so nothing can land on an
+  // existing node.
+  const coords = projectRegionLayout(fresh.map((s) => ({ x: s.x2 as number, y: s.y2 as number })));
+  const placed = existingRes.rows.filter((e) => e.x != null && e.y != null);
+  if (placed.length) {
+    const offX = Math.max(...placed.map((e) => e.x as number)) + REGION_NODE_W + REGION_APPEND_GAP;
+    const offY = Math.min(...placed.map((e) => e.y as number));
+    for (const c of coords) { c.x += offX; c.y += offY; }
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    if (fresh.length > 0) {
+      const sysCols = 15;
+      const sysPh: string[] = []; const sysVals: unknown[] = [];
+      fresh.forEach((s, idx) => {
+        const newId = crypto.randomUUID();
+        idByEve.set(s.id, newId);
+        const { x, y } = coords[idx];
+        const base = sysVals.length;
+        sysPh.push(`(${Array.from({ length: sysCols }, (_, i) => `$${base + i + 1}`).join(',')})`);
+        sysVals.push(
+          newId, mapId, s.id, s.name, s.systemClass ?? 'unknown',
+          s.effect ?? 'none', s.statics ?? [], regionName, null,
+          Math.round(x), Math.round(y), 'unknown', false, false, '',
+        );
+      });
+      await client.query(
+        `INSERT INTO map_systems
+           (id, map_id, eve_system_id, name, system_class, effect, statics, region_name, npc_type,
+            position_x, position_y, status, is_home, locked, notes)
+         VALUES ${sysPh.join(',')}`,
+        sysVals,
+      );
+    }
+    // Stargates among every system now on the map (existing + new). Each gate
+    // has a reverse twin, so dedup by undirected pair; drop self-loops, pairs
+    // already connected, and pairs where neither end is new.
+    const freshIds = new Set(fresh.map((s) => idByEve.get(s.id) as string));
+    const pairKey  = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+    const seen     = new Set<string>();
+    const existingConn = await client.query<{ a: string; b: string }>(
+      `SELECT source_id AS a, target_id AS b FROM map_connections WHERE map_id = $1`, [mapId],
+    );
+    for (const c of existingConn.rows) seen.add(pairKey(c.a, c.b));
+    const gateRes = await client.query<{ a: number; b: number }>(
+      `SELECT system_id AS a, destination_system_id AS b
+         FROM map_stargates
+        WHERE system_id = ANY($1::int[]) AND destination_system_id = ANY($1::int[])`,
+      [[...idByEve.keys()]],
+    );
+    const connPh: string[] = []; const connVals: unknown[] = [];
+    for (const g of gateRes.rows) {
+      const src = idByEve.get(g.a);
+      const tgt = idByEve.get(g.b);
+      if (!src || !tgt || src === tgt) continue;
+      if (!freshIds.has(src) && !freshIds.has(tgt)) continue;
+      const key = pairKey(src, tgt);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const base = connVals.length;
+      connPh.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6})`);
+      // Straight from map_stargates, so these ARE in-game gates.
+      connVals.push(crypto.randomUUID(), mapId, src, tgt, 'gate', 'large');
+    }
+    if (connPh.length > 0) {
+      await client.query(
+        `INSERT INTO map_connections (id, map_id, source_id, target_id, connection_type, size)
+         VALUES ${connPh.join(',')}`,
+        connVals,
+      );
+    }
+    await client.query(`UPDATE maps SET updated_at = NOW() WHERE id = $1`, [mapId]);
+    await client.query('COMMIT');
+    // Bulk change — tell other viewers to re-fetch rather than streaming every
+    // row. The initiator reloads itself, so its own echo is suppressed.
+    publishToMap(mapId, { type: 'map.resync', actor: req.get('x-client-id') ?? null });
+    res.status(201).json({
+      systems: fresh.length, connections: connPh.length,
+      skipped: sysRes.rows.length - fresh.length, region: regionName,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    log.error(`map ${mapId} seed-region ${regionId} failed:`, err);
     throw err;
   } finally {
     client.release();

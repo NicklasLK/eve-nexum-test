@@ -19,7 +19,7 @@ const SESSIONS_DDL = `
     expire timestamp(6) NOT NULL
   );`;
 
-// solar_systems / map_regions come from the SDE importer (setup-db), not from
+// solar_systems / map_regions / map_stargates come from the SDE importer (setup-db), not from
 // migrate(), so a test database has neither — and any route that joins them
 // (account-locations, pilots-online, the region reads) 500s with "relation does
 // not exist". Created here with the same shape setup-db uses, left EMPTY: suites
@@ -50,6 +50,12 @@ const SDE_DDL = `
     pos_z            DOUBLE PRECISION,
     pos2d_x          DOUBLE PRECISION,
     pos2d_y          DOUBLE PRECISION
+  );
+  CREATE TABLE IF NOT EXISTS map_stargates (
+    id                    INTEGER PRIMARY KEY,
+    system_id             INTEGER NOT NULL,
+    destination_gate_id   INTEGER NOT NULL,
+    destination_system_id INTEGER NOT NULL
   );`;
 
 let ready: Promise<boolean> | null = null;
@@ -72,7 +78,7 @@ export function ensureIntegrationDb(): Promise<boolean> {
 }
 
 const TABLES = [
-  'solar_systems', 'map_regions',
+  'solar_systems', 'map_regions', 'map_stargates',
   'access_grants', 'app_settings', 'map_shares', 'maps',
   'corp_standings', 'alliance_standings', 'character_standings',
   'standings_refresh', 'entity_names', 'sessions', 'user_events', 'users',

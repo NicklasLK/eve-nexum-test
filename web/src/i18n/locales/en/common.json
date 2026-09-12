@@ -621,6 +621,19 @@
     "typeCorp": "Corp",
     "typeAlliance": "Alliance"
   },
+  "addRegion": {
+    "title": "Add region to map",
+    "regionLabel": "Region",
+    "regionPlaceholder": "Type to search regions…",
+    "clearRegion": "Clear region",
+    "hint": "Adds the systems of {{region}} ({{count}}) that aren't on \"{{map}}\" yet, laid out by their in-game coordinates beside the current map, with every stargate link — including the regional gates to systems already here. Use Tidy layout afterwards to pack the regions together.",
+    "loadFailed": "Could not load the region list",
+    "failed": "Failed to add region",
+    "added": "Added {{systems}} systems and {{connections}} links from {{region}}",
+    "nothingNew": "Every system in {{region}} is already on this map",
+    "adding": "Adding…",
+    "add": "Add region"
+  },
   "createMap": {
     "title": "New Map",
     "mapName": "Map name",
@@ -1564,6 +1577,8 @@
       "extra": "Extra Thick"
     },
     "threshold": "Threshold",
+    "addRegion": "⊞ Add region…",
+    "addRegionTooltip": "Append another K-space region to this map, with its stargates and the regional gates to what's already here",
     "tidyLayout": "▦ Tidy layout",
     "tidyLayoutBusy": "Tidying…",
     "tidyLayoutDone": "Repositioned {{n}} system(s)",
