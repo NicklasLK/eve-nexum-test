@@ -31,15 +31,11 @@ function tcpProbe(address: string, family: number): Promise<string> {
 const MODERN_12 = 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305';
 const SUITES_13  = 'TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256';
 const TLS_VARIANTS: { label: string; opts: tls.ConnectionOptions & { noSni?: boolean } }[] = [
-  { label: 'default',                 opts: {} },
-  { label: 'tls1.2-6-suites',         opts: { maxVersion: 'TLSv1.2', ciphers: MODERN_12 } },
-  { label: 'tls1.2-6-suites-x25519',  opts: { maxVersion: 'TLSv1.2', ciphers: MODERN_12, ecdhCurve: 'X25519:prime256v1' } },
-  { label: 'tls1.3-3-suites',         opts: { minVersion: 'TLSv1.3', ciphers: SUITES_13 } },
-  { label: 'tls1.3-3-suites-x25519',  opts: { minVersion: 'TLSv1.3', ciphers: SUITES_13, ecdhCurve: 'X25519:prime256v1' } },
-  { label: 'mixed-9-suites',          opts: { ciphers: SUITES_13 + ':' + MODERN_12 } },
-  { label: 'mixed-9-suites-x25519',   opts: { ciphers: SUITES_13 + ':' + MODERN_12, ecdhCurve: 'X25519:prime256v1' } },
-  { label: 'default-curves-trimmed',  opts: { ecdhCurve: 'X25519:prime256v1' } },
-  { label: 'tls1.3-one-suite-p256',   opts: { minVersion: 'TLSv1.3', ciphers: 'TLS_AES_128_GCM_SHA256', ecdhCurve: 'prime256v1' } },
+  // 'default' needs the server's full ServerHello + certificate flight to
+  // arrive; 'tiny-x25519' provokes a one-record alert from a server that
+  // rejects it, so it answers even when large inbound packets are lost.
+  { label: 'default',     opts: {} },
+  { label: 'tiny-x25519', opts: { minVersion: 'TLSv1.3', ciphers: 'TLS_AES_128_GCM_SHA256', ecdhCurve: 'X25519' } },
 ];
 
 function tlsProbe(address: string, family: number, servername: string, variant: tls.ConnectionOptions & { noSni?: boolean } = {}): Promise<string> {
