@@ -56,7 +56,6 @@ interface Route {
 }
 interface PlanResp {
   from: { id: number; name: string }; to: { id: number; name: string }; routes: Route[];
-  coords: Record<number, { x: number; y: number }>;
   sources: { scoutHoles: number; wormholes: number; bridges: number; services: number; capitalEdges: number };
 }
 type Picked = PickedSystem;
@@ -200,7 +199,7 @@ export function FleetRoutesModal({ onClose }: { onClose: () => void }) {
                   <RouteCard key={r.id} route={r} selected={i === selected} shipClass={shipClass} onSelect={() => setSelected(i)}
                     onSend={() => sendToAutopilot(r)} sending={sending} />
                 ))}
-                {route && <RouteMap route={route} coords={result.coords} />}
+                {route && <RouteString route={route} shipClass={shipClass} />}
               </>
             )}
             {!result && !drawer && !error && !loading && (
@@ -335,63 +334,134 @@ function Strip({ route }: { route: Route }) {
   );
 }
 
-// Route on CCP's 2D star-map projection. J-space systems have no projection
-// coordinates; they are placed halfway between their k-space neighbours.
-function RouteMap({ route, coords }: { route: Route; coords: Record<number, { x: number; y: number }> }) {
+// The selected route as pearls on a string: one bead per system, evenly
+// spaced and wrapping, joined by a line coloured by how the hop is made.
+// Hovering a bead or a hop shows the details (wormhole type, mass, time
+// left, capacity for the chosen hull class, bridge name, jump distance).
+const SHIP_ORDER_DESC: ShipClass[] = ['capital', 'battleship', 'battlecruiser', 'cruiser', 'destroyer', 'frigate'];
+
+type Hover = { seg: Segment | null; sys: Route['systems'][number] | null; x: number; y: number };
+
+function RouteString({ route, shipClass }: { route: Route; shipClass: ShipClass }) {
   const { t } = useTranslation();
-  const pts: { x: number; y: number; name: string; id: number; wspace: boolean }[] = [];
-  const raw = route.systems.map((s) => ({ ...s, c: coords[s.id] ?? null }));
-  for (let i = 0; i < raw.length; i++) {
-    let c = raw[i].c;
-    if (!c) {
-      const prev = raw.slice(0, i).reverse().find((r) => r.c)?.c, next = raw.slice(i + 1).find((r) => r.c)?.c;
-      if (prev && next) c = { x: (prev.x + next.x) / 2, y: (prev.y + next.y) / 2 + 1 };
-      else if (prev) c = { x: prev.x + 1, y: prev.y }; else if (next) c = { x: next.x - 1, y: next.y }; else c = { x: i, y: 0 };
-    }
-    pts.push({ x: c.x, y: c.y, name: raw[i].name, id: raw[i].id, wspace: raw[i].wspace });
-  }
-  if (pts.length < 2) return null;
-  const W = 760, H = 170, PAD = 34;
-  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
-  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-  const spanX = maxX - minX || 1, spanY = maxY - minY || 1;
-  const scale = Math.min((W - 2 * PAD) / spanX, (H - 2 * PAD) / spanY);
-  const ox = (W - spanX * scale) / 2, oy = (H - spanY * scale) / 2;
-  const sx = (x: number) => ox + (x - minX) * scale;
-  const sy = (y: number) => oy + (maxY - y) * scale;
-  const sp = pts.map((p) => ({ ...p, X: sx(p.x), Y: sy(p.y) }));
+  const [hover, setHover] = useState<Hover | null>(null);
+  const enter = (seg: Segment | null, sys: Route['systems'][number] | null) => (e: React.MouseEvent) =>
+    setHover({ seg, sys, x: e.clientX, y: e.clientY });
+  const move = (e: React.MouseEvent) => setHover((h) => (h ? { ...h, x: e.clientX, y: e.clientY } : h));
+  const leave = () => setHover(null);
+  const last = route.systems.length - 1;
   const used = new Set(route.segments.map((s) => s.method));
   const legend = (color: string, dashed: boolean, label: string) => (
-    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ display: 'inline-block', width: 14, borderTop: `2px ${dashed ? 'dashed' : 'solid'} ${color}` }} /> {label}
-    </div>
+    <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ display: 'inline-block', width: 16, borderTop: `2px ${dashed ? 'dashed' : 'solid'} ${color}` }} /> {label}
+    </span>
   );
+
   return (
-    <div style={{ position: 'relative', borderRadius: 6, overflow: 'hidden' }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', maxHeight: '45vh', background: '#0d1117', display: 'block' }}>
-        {sp.slice(1).map((p, i) => {
-          const m = route.segments[i].method;
-          return <line key={i} x1={sp[i].X} y1={sp[i].Y} x2={p.X} y2={p.Y} stroke={METHOD_COLOR[m]} strokeWidth={2} opacity={0.9}
-            strokeDasharray={m === 'stargate' ? undefined : '6 4'} />;
-        })}
-        {sp.map((p, i) => {
-          const first = i === 0, last = i === sp.length - 1;
+    <div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', rowGap: 16, padding: '12px 8px 6px', background: 'var(--surface-well)', border: '1px solid var(--border)', borderRadius: 6 }}>
+        {route.systems.map((sys, i) => {
+          const seg = i > 0 ? route.segments[i - 1] : null;
+          const risk = seg && (seg.timeStatus === 'eol' || seg.massStatus === 'critical');
+          const color = seg ? (risk ? 'var(--danger)' : METHOD_COLOR[seg.method]) : '';
           return (
-            <g key={`${p.id}-${i}`}>
-              <circle cx={p.X} cy={p.Y} r={first || last ? 6 : 5} fill={first ? '#3ddc84' : last ? '#e69f00' : '#161b22'} stroke={p.wspace ? '#b06ad0' : '#56b4e9'} strokeWidth={2} />
-              {(first || last || sp.length <= 14) && (
-                <text x={p.X} y={p.Y + (i % 2 === 0 ? 18 : -9)} fill="#c9d1d9" fontSize={11} textAnchor="middle" stroke="#0d1117" strokeWidth={3} paintOrder="stroke">{p.name}</text>
+            <Fragment key={`${sys.id}-${i}`}>
+              {seg && (
+                <div onMouseEnter={enter(seg, null)} onMouseMove={move} onMouseLeave={leave}
+                  style={{ flex: '0 0 auto', width: seg.method === 'stargate' ? 26 : 46, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'help' }}>
+                  <div style={{ width: '100%', height: 0, marginTop: 7, borderTop: `${seg.method === 'stargate' ? 2 : 3}px ${seg.method === 'stargate' ? 'solid' : 'dashed'} ${color}` }} />
+                  {seg.method !== 'stargate' && (
+                    <div style={{ fontSize: 10, color, marginTop: 4, whiteSpace: 'nowrap', maxWidth: 46, overflow: 'hidden', textOverflow: 'ellipsis' }}>{linkLabel(seg)}</div>
+                  )}
+                </div>
               )}
-            </g>
+              <div onMouseEnter={enter(null, sys)} onMouseMove={move} onMouseLeave={leave}
+                style={{ flex: '0 0 auto', width: 72, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'help' }}>
+                <span style={{
+                  width: 14, height: 14, borderRadius: '50%', boxSizing: 'border-box', background: truesecColor(sys.security),
+                  border: `2px solid ${i === 0 ? '#3ddc84' : i === last ? '#e69f00' : sys.wspace ? '#b06ad0' : '#56b4e9'}`,
+                  boxShadow: i === 0 || i === last ? '0 0 0 2px rgba(255,255,255,0.08)' : undefined,
+                }} />
+                <span style={{ fontSize: 11, marginTop: 4, maxWidth: 72, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: i === 0 || i === last ? 'var(--text)' : 'var(--text-subtle)', fontWeight: i === 0 || i === last ? 600 : 400 }}>{sys.name}</span>
+              </div>
+            </Fragment>
           );
         })}
-      </svg>
-      <div style={{ position: 'absolute', top: 8, right: 10, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--text-subtle)', background: 'rgba(13,17,23,0.7)', padding: '5px 8px', borderRadius: 5 }}>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 11, color: 'var(--text-subtle)', marginTop: 6 }}>
         {legend(METHOD_COLOR.stargate, false, t('fleetRoutes.legend.stargate'))}
         {used.has('jump_bridge') && legend('#5a9af8', true, t('fleetRoutes.legend.bridge'))}
         {used.has('wormhole') && legend(METHOD_COLOR.wormhole, true, t('fleetRoutes.legend.wormhole'))}
         {(used.has('titan_bridge') || used.has('blops_bridge') || used.has('carrier_conduit')) && legend(METHOD_COLOR.titan_bridge, true, t('fleetRoutes.legend.capital'))}
+        <span>{t('fleetRoutes.hover.hint')}</span>
       </div>
+      {hover && createPortal(<HoverCard hover={hover} shipClass={shipClass} />, document.body)}
+    </div>
+  );
+}
+
+function linkLabel(seg: Segment): string {
+  switch (seg.method) {
+    case 'jump_bridge':     return 'JB';
+    case 'wormhole':        return seg.whType ?? 'WH';
+    case 'titan_bridge':    return `T ${seg.distanceLy?.toFixed(1)}ly`;
+    case 'blops_bridge':    return `B ${seg.distanceLy?.toFixed(1)}ly`;
+    case 'carrier_conduit': return `C ${seg.distanceLy?.toFixed(1)}ly`;
+    default: return '';
+  }
+}
+
+function HoverCard({ hover, shipClass }: { hover: Hover; shipClass: ShipClass }) {
+  const { t } = useTranslation();
+  const W = 300;
+  const left = Math.min(hover.x + 16, window.innerWidth - W - 12);
+  const top = Math.min(hover.y + 16, window.innerHeight - 220);
+  const row = (k: string, v: React.ReactNode, color?: string) => (
+    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+      <span style={{ color: 'var(--text-subtle)' }}>{k}</span><span style={{ color: color ?? 'var(--text)', textAlign: 'right' }}>{v}</span>
+    </div>
+  );
+  let title = '', rows: React.ReactNode[] = [];
+  const { seg, sys } = hover;
+  if (sys) {
+    title = sys.name;
+    rows = [row(t('fleetRoutes.hover.security'), sys.security.toFixed(1), truesecColor(sys.security))];
+    if (sys.wspace) rows.push(row(t('fleetRoutes.hover.space'), t('fleetRoutes.hover.wspaceNoAutopilot')));
+  } else if (seg) {
+    const from = seg.from.name, to = seg.to.name;
+    switch (seg.method) {
+      case 'stargate': title = t('fleetRoutes.hover.stargate'); break;
+      case 'jump_bridge': title = t('fleetRoutes.hover.bridge'); break;
+      case 'wormhole': title = `${t('fleetRoutes.hover.wormhole')} ${seg.whType ?? 'K162'}`; break;
+      case 'titan_bridge': title = t('fleetRoutes.kind.titan'); break;
+      case 'blops_bridge': title = t('fleetRoutes.kind.blops'); break;
+      case 'carrier_conduit': title = t('fleetRoutes.kind.conduit'); break;
+    }
+    rows.push(row(t('fleetRoutes.hover.hop'), `${from} → ${to}`));
+    if (seg.name) rows.push(row(t('fleetRoutes.hover.name'), seg.name));
+    if (seg.distanceLy) rows.push(row(t('fleetRoutes.hover.distance'), `${seg.distanceLy.toFixed(2)} ly`));
+    if (seg.method === 'wormhole') {
+      if (seg.scout) rows.push(row(t('fleetRoutes.hover.source'), 'EvE-Scout'));
+      if (seg.massStatus) rows.push(row(t('fleetRoutes.hover.mass'), t(`fleetRoutes.hover.mass_${seg.massStatus}`), seg.massStatus === 'critical' ? 'var(--danger)' : seg.massStatus === 'reduced' ? '#f0a030' : undefined));
+      if (seg.timeStatus) rows.push(row(t('fleetRoutes.hover.time'), t(`fleetRoutes.hover.time_${seg.timeStatus}`), seg.timeStatus === 'eol' ? 'var(--danger)' : undefined));
+      if (seg.remainingHours != null) rows.push(row(t('fleetRoutes.hover.remaining'), `~${seg.remainingHours < 10 ? seg.remainingHours.toFixed(1) : Math.round(seg.remainingHours)} h`, seg.remainingHours < 8 ? '#f0a030' : undefined));
+      if (seg.maxShipSize) rows.push(row(t('fleetRoutes.hover.maxShip'), seg.maxShipSize));
+      if (seg.maxJumpMassKg) rows.push(row(t('fleetRoutes.hover.maxJump'), `${fmtMass(seg.maxJumpMassKg)} kg`));
+      if (seg.maxStableMassKg) rows.push(row(t('fleetRoutes.hover.total'), `${fmtMass(seg.maxStableMassKg)} kg`));
+      if (seg.capacity) {
+        const fits = SHIP_ORDER_DESC.find((c) => seg.capacity![c].perJump);
+        rows.push(row(t('fleetRoutes.hover.fits'), fits ? t(`fleetRoutes.ship.${fits}`) : '—'));
+        const mine = seg.capacity[shipClass];
+        rows.push(row(t('fleetRoutes.hover.capacityFor', { ship: t(`fleetRoutes.ship.${shipClass}`) }),
+          mine.perJump ? t('fleetRoutes.passesLeft', { count: mine.totalPasses }) : t('fleetRoutes.hover.tooHeavy'),
+          mine.perJump ? undefined : 'var(--danger)'));
+      }
+    }
+  }
+  return (
+    <div style={{ position: 'fixed', left, top, width: W, zIndex: 10000, pointerEvents: 'none', background: 'var(--surface-panel)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', fontSize: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.45)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div style={{ fontWeight: 600, marginBottom: 2 }}>{title}</div>
+      {rows}
     </div>
   );
 }
