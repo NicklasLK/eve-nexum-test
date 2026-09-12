@@ -30,15 +30,15 @@ function tcpProbe(address: string, family: number): Promise<string> {
 // cipher count, curve list, and protocol version, one axis at a time.
 const MODERN_12 = 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305';
 const SUITES_13  = 'TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256';
-const TLS_VARIANTS: { label: string; opts: tls.ConnectionOptions & { noSni?: boolean } }[] = [
+const TLS_VARIANTS: { label: string; opts: tls.ConnectionOptions & { noSni?: boolean }; timeoutMs?: number }[] = [
   // 'default' needs the server's full ServerHello + certificate flight to
   // arrive; 'tiny-x25519' provokes a one-record alert from a server that
   // rejects it, so it answers even when large inbound packets are lost.
-  { label: 'default',     opts: {} },
+  { label: 'default',     opts: {}, timeoutMs: 30_000 },
   { label: 'tiny-x25519', opts: { minVersion: 'TLSv1.3', ciphers: 'TLS_AES_128_GCM_SHA256', ecdhCurve: 'X25519' } },
 ];
 
-function tlsProbe(address: string, family: number, servername: string, variant: tls.ConnectionOptions & { noSni?: boolean } = {}): Promise<string> {
+function tlsProbe(address: string, family: number, servername: string, variant: tls.ConnectionOptions & { noSni?: boolean } = {}, timeoutMs = STEP_TIMEOUT_MS): Promise<string> {
   return new Promise((resolve) => {
     const t0 = Date.now();
     // tls.connect has no `family` option: open the TCP socket ourselves so the
@@ -47,7 +47,7 @@ function tlsProbe(address: string, family: number, servername: string, variant: 
     raw.once('error', (e: NodeJS.ErrnoException) => { resolve(`tls ERROR (tcp) ${e.code ?? e.message} after ${Date.now() - t0}ms`); });
     const { noSni, ...tlsOpts } = variant;
     const sock = tls.connect({ socket: raw, ...(noSni ? {} : { servername }), ...tlsOpts });
-    sock.setTimeout(STEP_TIMEOUT_MS);
+    sock.setTimeout(timeoutMs);
     sock.once('secureConnect', () => {
       const out = `tls ok ${Date.now() - t0}ms ${sock.getProtocol() ?? ''} ${sock.getCipher()?.name ?? ''} alpn=${sock.alpnProtocol || '-'} authorized=${sock.authorized}`;
       sock.destroy(); resolve(out);
@@ -76,7 +76,7 @@ export async function runNetProbe(spec: string): Promise<void> {
     const first = uniq[0];
     if (first) {
       for (const v of TLS_VARIANTS) {
-        log.info(`${host} [${first.address}] ${v.label}: ${await tlsProbe(first.address, first.family, host, v.opts)}`);
+        log.info(`${host} [${first.address}] ${v.label}: ${await tlsProbe(first.address, first.family, host, v.opts, v.timeoutMs)}`);
       }
     }
     const t1 = Date.now();
