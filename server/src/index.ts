@@ -51,6 +51,10 @@ import { keysRouter } from './routes/keys.js';
 import { apiV1Router } from './routes/apiV1.js';
 import { shareRouter } from './routes/share.js';
 import searchRouter from './routes/search.js';
+import fleetRoutesRouter from './routes/fleetRoutes.js';
+import { jumpBridgesRouter } from './routes/jumpBridges.js';
+import { bridgeServicesRouter } from './routes/bridgeServices.js';
+import { startStructureReaderSync } from './services/structureReaderSync.js';
 import { authLimiter, esiLimiter, publicLimiter, appLimiter } from './middleware/rateLimits.js';
 import { originGuard } from './middleware/originGuard.js';
 import { createLogger } from './utils/logger.js';
@@ -158,6 +162,9 @@ app.use('/api/v1', (req, res, next) => {
   next();
 }, appLimiter, apiV1Router);
 app.use('/api/search',            esiLimiter, searchRouter);
+app.use('/api/fleet-routes',      esiLimiter, fleetRoutesRouter);
+app.use('/api/jump-bridges',      appLimiter, jumpBridgesRouter);
+app.use('/api/bridge-services',   appLimiter, bridgeServicesRouter);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
@@ -202,6 +209,7 @@ migrate()
     startWhSweeper();
     startConnLifetimeSweeper();
     startIskDonationPoller();
+    startStructureReaderSync();
     startAccessRevalidation();
     startKillFeed();
     void startTelemetry();

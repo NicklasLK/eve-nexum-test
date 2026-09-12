@@ -23,6 +23,7 @@ import { Doughnut, Line } from 'react-chartjs-2';
 import { CaretUpIcon, CaretDownIcon, XIcon, ArrowSquareOutIcon } from '../../icons';
 import { createPortal } from 'react-dom';
 import styles from './AdminPage.module.css';
+import { JumpBridgesTab, BridgeServicesTab } from './FleetRoutesAdmin';
 
 // Register only the chart pieces we actually use — keeps the bundle lean.
 ChartJS.register(ArcElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
@@ -61,7 +62,7 @@ function RolesInfoModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-type Tab = 'users' | 'access' | 'maps' | 'reports' | 'audit' | 'discord';
+type Tab = 'users' | 'access' | 'maps' | 'reports' | 'audit' | 'discord' | 'bridges' | 'services';
 
 const ALL_TABS: { key: Tab; path: string }[] = [
   { key: 'users',   path: '/admin/users'   },
@@ -70,6 +71,8 @@ const ALL_TABS: { key: Tab; path: string }[] = [
   { key: 'reports', path: '/admin/reports' },
   { key: 'discord', path: '/admin/discord' },
   { key: 'audit',   path: '/admin/audit'   },
+  { key: 'bridges',  path: '/admin/bridges'  },
+  { key: 'services', path: '/admin/services' },
 ];
 
 export function AdminPage() {
@@ -113,6 +116,8 @@ export function AdminPage() {
         {tab === 'reports' && (isAdmin || canSeeReports) && <ReportsTab />}
         {tab === 'discord' && isAdmin       && <DiscordTab />}
         {tab === 'audit'   && isAdmin       && <AuditTab />}
+        {tab === 'bridges'  && isAdmin      && <JumpBridgesTab />}
+        {tab === 'services' && isAdmin      && <BridgeServicesTab />}
       </main>
     </div>
   );
@@ -125,6 +130,8 @@ function pathToTab(path: string, isAdmin: boolean, canSeeReports: boolean): Tab 
   if (path.startsWith('/admin/reports')) return (isAdmin || canSeeReports) ? 'reports' : fallback;
   if (path.startsWith('/admin/discord')) return isAdmin       ? 'discord' : fallback;
   if (path.startsWith('/admin/audit'))   return isAdmin       ? 'audit'   : fallback;
+  if (path.startsWith('/admin/bridges'))  return isAdmin      ? 'bridges'  : fallback;
+  if (path.startsWith('/admin/services')) return isAdmin      ? 'services' : fallback;
   return fallback;
 }
 

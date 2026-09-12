@@ -1070,6 +1070,83 @@ export async function migrate() {
     );
     CREATE INDEX IF NOT EXISTS idx_npc_stations_system ON npc_stations (solar_system_id);
 
+    -- ── Fleet route planner (services/fleetRoutes.ts) ────────────────────────
+    -- Ansiblex jump bridges the planner may use. Shared rows (owner_id NULL) are
+    -- alliance-wide: discovered by a structure reader (source 'esi') or pasted by
+    -- a full/admin user (source 'manual'). Personal rows carry the account's
+    -- owner_id and are only ever seen by that account. One row per unordered
+    -- pair per scope; direction is irrelevant (a bridge works both ways).
+    CREATE TABLE IF NOT EXISTS jump_bridges (
+      id              SERIAL      PRIMARY KEY,
+      from_system_id  INTEGER     NOT NULL,
+      to_system_id    INTEGER     NOT NULL,
+      owner_id        INTEGER     REFERENCES owners(id) ON DELETE CASCADE,
+      name            TEXT        NOT NULL DEFAULT '',
+      owner_corp_id   INTEGER,
+      structure_id    BIGINT,
+      source          TEXT        NOT NULL DEFAULT 'manual',
+      -- Admin switch. Separate from missed_syncs so a deliberate "deactivate"
+      -- survives the next sync and a gate that vanished from ESI is never
+      -- deleted behind the admin's back — it just stops being used.
+      active          BOOLEAN     NOT NULL DEFAULT TRUE,
+      missed_syncs    INTEGER     NOT NULL DEFAULT 0,
+      last_seen_at    TIMESTAMPTZ,
+      added_by        INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (from_system_id <> to_system_id),
+      CHECK (source IN ('esi', 'manual'))
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_jump_bridges_pair
+      ON jump_bridges (LEAST(from_system_id, to_system_id), GREATEST(from_system_id, to_system_id), COALESCE(owner_id, 0));
+    CREATE INDEX IF NOT EXISTS idx_jump_bridges_owner ON jump_bridges (owner_id);
+
+    -- Standby capital bridge pilots: a titan / black ops / conduit ship parked
+    -- in system_id that can bridge a fleet to any low/null system within range.
+    -- Shared (owner_id NULL, full/admin managed) or personal, like bridges.
+    CREATE TABLE IF NOT EXISTS bridge_services (
+      id          SERIAL      PRIMARY KEY,
+      system_id   INTEGER     NOT NULL,
+      kind        TEXT        NOT NULL,
+      range_ly    NUMERIC(4,1),
+      name        TEXT        NOT NULL DEFAULT '',
+      owner_id    INTEGER     REFERENCES owners(id) ON DELETE CASCADE,
+      active      BOOLEAN     NOT NULL DEFAULT TRUE,
+      added_by    INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (kind IN ('titan', 'blops', 'conduit'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_bridge_services_owner ON bridge_services (owner_id);
+
+    -- Per-account "hide this shared bridge/service from MY plans".
+    CREATE TABLE IF NOT EXISTS bridge_exclusions (
+      owner_id   INTEGER NOT NULL REFERENCES owners(id) ON DELETE CASCADE,
+      kind       TEXT    NOT NULL,
+      target_id  INTEGER NOT NULL,
+      PRIMARY KEY (owner_id, kind, target_id),
+      CHECK (kind IN ('bridge', 'service'))
+    );
+
+    -- Characters (usually alts with Station Manager / Director in the corp that
+    -- owns the gates) whose corp structures are read hourly to keep jump_bridges
+    -- current. Own table for the same reason as wallet_reader: an ordinary login
+    -- of the same character must never replace this token.
+    CREATE TABLE IF NOT EXISTS structure_readers (
+      character_id    BIGINT      PRIMARY KEY,
+      character_name  TEXT        NOT NULL DEFAULT '',
+      corp_id         INTEGER,
+      corp_name       TEXT        NOT NULL DEFAULT '',
+      refresh_token   TEXT        NOT NULL,
+      scopes          TEXT        NOT NULL DEFAULT '',
+      role            TEXT        NOT NULL DEFAULT '',
+      gates_found     INTEGER     NOT NULL DEFAULT 0,
+      last_sync_at    TIMESTAMPTZ,
+      last_error      TEXT,
+      added_by        INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     -- ── ISK for extra maps (config.iskMaps, services/iskDonations.ts) ─────────
     -- The operator token that reads the donation corp's wallet journal.
     --

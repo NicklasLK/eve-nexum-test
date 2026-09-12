@@ -19,6 +19,9 @@ declare module 'express-session' {
     /** True while an admin is authorising the ISK-donation wallet reader, so the
      *  shared SSO callback knows this round-trip is not a login. */
     walletReaderFlow?: boolean;
+    /** True while an admin is authorising a jump-bridge structure reader (an
+     *  alt in the corp that owns the Ansiblex gates); same callback, not a login. */
+    structureReaderFlow?: boolean;
     // Cached UI preferences — kept in sync by PATCH /auth/preferences so
     // /auth/me doesn't have to hit the DB on every page load.
     prefs: {

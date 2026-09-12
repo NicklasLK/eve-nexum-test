@@ -82,6 +82,9 @@ export function resetWormholeCache(): void {
   inflight = null;
 }
 
+/** Wormhole specs by type code (e.g. 'K162' absent, 'N944' → masses). Cached. */
+export async function getWormholeSpecs(): Promise<Record<string, WormholeSpec>> { return loadSpecs(); }
+
 async function loadSpecs(): Promise<Record<string, WormholeSpec>> {
   if (cache) return cache;
   if (inflight) return inflight;
