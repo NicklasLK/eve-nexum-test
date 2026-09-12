@@ -5,10 +5,6 @@ import { useEsiSearch, systemResultLabel, type SystemSearchResult } from '../../
 
 export type PickedSystem = { id: number; name: string } | null;
 
-/** LS/NS only, excluding Pochven — the systems a capital can bridge to. */
-export const lowNullFilter = (r: SystemSearchResult): boolean =>
-  (r.systemClass === 'LS' || r.systemClass === 'NS') && r.npcType !== 'Triglavian';
-
 // Solar-system search field: a labelled input with the shared search-results
 // dropdown; once a system is picked it shows as a chip with an X to change it.
 // `filter` narrows the results (e.g. lowNullFilter for bridge services).

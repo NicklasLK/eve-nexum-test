@@ -37,6 +37,10 @@ export async function fetchSystemDetail(id: number): Promise<SystemDetail> {
   return api<SystemDetail>(`/api/systems/${id}`);
 }
 
+/** LS/NS only, excluding Pochven — the systems a capital can bridge to. */
+export const lowNullFilter = (r: SystemSearchResult): boolean =>
+  (r.systemClass === 'LS' || r.systemClass === 'NS') && r.npcType !== 'Triglavian';
+
 export function useEsiSearch(query: string, debounceMs = 300) {
   const [results, setResults] = useState<SystemSearchResult[]>([]);
   const [loading, setLoading] = useState(false);

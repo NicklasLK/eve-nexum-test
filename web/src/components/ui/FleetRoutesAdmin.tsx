@@ -8,7 +8,8 @@ import { timeAgo, DASH } from '../../i18n/format';
 import { XIcon } from '../../icons';
 import { ConfirmModal } from './ConfirmModal';
 import { Select } from './Select';
-import { SystemSearchField, lowNullFilter, type PickedSystem } from './SystemSearchField';
+import { SystemSearchField, type PickedSystem } from './SystemSearchField';
+import { lowNullFilter } from '../../hooks/useEsiSearch';
 import styles from './AdminPage.module.css';
 
 // Admin › Jump bridges and Admin › Bridge services: the shared data the fleet
