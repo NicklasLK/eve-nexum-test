@@ -73,6 +73,7 @@ services:
       - NEXUM_TELEMETRY
       - NEXUM_TELEMETRY_URL
       - TRUST_PROXY_HOPS
+      - EVE_SCOUT_URL
     command: ["node", "dist/scripts/setup-db.js"]
     volumes:
       # Persist the downloaded SDE zip so re-imports don't re-fetch it.

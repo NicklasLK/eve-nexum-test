@@ -48,7 +48,9 @@ interface RawScoutEntry {
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min — eve-scout updates frequently
 const cache = new TtlValue<ScoutConnection[]>(CACHE_TTL_MS);
 
-const SCOUT_URL        = 'https://api.eve-scout.com/v2/public/signatures';
+// EVE_SCOUT_URL lets a deployment point at a relay of the public feed (same JSON
+// shape) when its host cannot reach api.eve-scout.com directly.
+const SCOUT_URL        = (process.env.EVE_SCOUT_URL ?? '').trim() || 'https://api.eve-scout.com/v2/public/signatures';
 const SCOUT_TIMEOUT_MS = 15_000;
 // eve-scout asks API consumers to identify themselves; a blank UA is also the
 // first thing a CDN front door drops.
