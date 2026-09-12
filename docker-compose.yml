@@ -72,6 +72,7 @@ services:
       - DISCORD_WEBHOOK_URL
       - NEXUM_TELEMETRY
       - NEXUM_TELEMETRY_URL
+      - TRUST_PROXY_HOPS
     command: ["node", "dist/scripts/setup-db.js"]
     volumes:
       # Persist the downloaded SDE zip so re-imports don't re-fetch it.

@@ -27,5 +27,9 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # only var we want substituted keeps nginx's own $vars (resolver, etc.) intact.
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 ENV NGINX_ENVSUBST_TEMPLATE_SUFFIX=.template
-ENV NGINX_ENVSUBST_FILTER='^API_PORT$'
+# API_HOST is the upstream hostname of the API container: `server` under docker
+# compose (the service name), or the platform's internal hostname elsewhere
+# (e.g. `<service>.internal` on Sliplane). API_PORT must match the server's PORT.
+ENV API_HOST=server
+ENV NGINX_ENVSUBST_FILTER='^API_(HOST|PORT)$'
 EXPOSE 80
