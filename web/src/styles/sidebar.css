@@ -178,13 +178,17 @@
 
 /* Discord CTA in the top bar: icon + label, Discord blurple accent. Uses the
    base .toolbar__toggle (text-capable) + --prominent, not the icon-only variant. */
-.toolbar__discord {
+/* Toolbar button with an icon AND a label, for the features people should
+   spot at a glance (Fleet Routes). */
+.toolbar__labelled {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   text-decoration: none;
+  padding: 5px 10px 5px 7px;
+  font-weight: 600;
 }
-.toolbar__discord svg { display: block; }
+.toolbar__labelled svg { display: block; }
 
 .toolbar__map-name {
   background: transparent;

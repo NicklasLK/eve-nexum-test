@@ -623,12 +623,13 @@ export function Toolbar() {
         </button>
 
         <button
-          className="toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent"
+          className="toolbar__toggle toolbar__toggle--prominent toolbar__labelled"
           onClick={() => setShowFleetRoutes(true)}
           data-tooltip={t('fleetRoutes.tooltip')}
           aria-label={t('fleetRoutes.title')}
         >
           <PathIcon size={18} weight="regular" />
+          <span>{t('fleetRoutes.title')}</span>
         </button>
 
         {/* Layout switch. Lives here rather than in the sidebar's display
