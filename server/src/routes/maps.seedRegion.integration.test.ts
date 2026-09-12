@@ -29,8 +29,11 @@ async function seedMap(userId: number, name: string): Promise<string> {
 
 // Two tiny K-space regions joined by one regional gate:
 //
-//   Pure Blind (1):  A ── B          Fade (2):  C ── D
-//   regional gate:        B ────────────── C
+//   Fade (2):        C ── D      (star-map Y = 10: due NORTH of Pure Blind)
+//                    │
+//   regional gate:   │ (B ── C)
+//                    │
+//   Pure Blind (1):  A ── B      (star-map Y = 0)
 //
 // Every gate has a reverse twin, like the real SDE table.
 const A = 30000001, B = 30000002, C = 30000003, D = 30000004;
@@ -39,7 +42,7 @@ async function seedSde(): Promise<void> {
   await db.query(
     `INSERT INTO solar_systems (id, name, region_id, pos2d_x, pos2d_y) VALUES
        ($1, 'A-1', 1, 0, 0), ($2, 'B-2', 1, 1, 0),
-       ($3, 'C-3', 2, 10, 0), ($4, 'D-4', 2, 11, 0)`,
+       ($3, 'C-3', 2, 0, 10), ($4, 'D-4', 2, 1, 10)`,
     [A, B, C, D]);
   const gates: [number, number][] = [[A, B], [B, A], [C, D], [D, C], [B, C], [C, B]];
   for (const [i, [from, to]] of gates.entries()) {
@@ -86,7 +89,7 @@ describe.skipIf(!dbReady)('POST /api/maps/:id/seed-region (integration)', () => 
     expect(await connections(mapId)).toEqual([{ a: A, b: B, type: 'gate' }]);
   });
 
-  it('appends a second region beside the first and wires the regional gate', async () => {
+  it('appends a second region on its true compass side (north → above) and wires the regional gate', async () => {
     await request(app).post(`/api/maps/${mapId}/seed-region`).send({ regionId: 1 });
     const res = await request(app).post(`/api/maps/${mapId}/seed-region`).send({ regionId: 2 });
     expect(res.status).toBe(201);
@@ -96,10 +99,17 @@ describe.skipIf(!dbReady)('POST /api/maps/:id/seed-region (integration)', () => 
     const sys = await systems(mapId);
     expect(sys.map((s) => s.eve)).toEqual([A, B, C, D]);
     expect(sys.map((s) => s.region)).toEqual(['Pure Blind', 'Pure Blind', 'Fade', 'Fade']);
-    // The new block sits clear to the right of everything that was already there.
-    const firstMaxX = Math.max(...sys.filter((s) => s.region === 'Pure Blind').map((s) => Number(s.x)));
-    const secondMinX = Math.min(...sys.filter((s) => s.region === 'Fade').map((s) => Number(s.x)));
-    expect(secondMinX).toBeGreaterThan(firstMaxX + 200);
+    // Fade is north of Pure Blind in star-map space, so its block lands ABOVE
+    // (screen Y grows down), clear of the existing content, not off to the right.
+    const pb   = sys.filter((s) => s.region === 'Pure Blind');
+    const fade = sys.filter((s) => s.region === 'Fade');
+    const pbMinY   = Math.min(...pb.map((s) => Number(s.y)));
+    const fadeMaxY = Math.max(...fade.map((s) => Number(s.y)));
+    expect(fadeMaxY).toBeLessThan(pbMinY - 300);
+    const pbMinX = Math.min(...pb.map((s) => Number(s.x))), pbMaxX = Math.max(...pb.map((s) => Number(s.x)));
+    const fadeMinX = Math.min(...fade.map((s) => Number(s.x)));
+    expect(fadeMinX).toBeGreaterThanOrEqual(pbMinX - 600);
+    expect(fadeMinX).toBeLessThanOrEqual(pbMaxX + 600);
 
     expect(await connections(mapId)).toEqual([
       { a: A, b: B, type: 'gate' },

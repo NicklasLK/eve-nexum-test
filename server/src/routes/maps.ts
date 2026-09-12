@@ -1443,9 +1443,11 @@ mapsRouter.post('/:mapId/seed-region', async (req, res) => {
       [regionId],
     ),
     db.query<{ name: string }>(`SELECT name FROM map_regions WHERE id = $1`, [regionId]),
-    db.query<{ id: string; eveId: number | null; x: number | null; y: number | null }>(
-      `SELECT id, eve_system_id AS "eveId", position_x AS x, position_y AS y
-         FROM map_systems WHERE map_id = $1`,
+    db.query<{ id: string; eveId: number | null; x: number | null; y: number | null; px: number | null; py: number | null }>(
+      `SELECT ms.id, ms.eve_system_id AS "eveId", ms.position_x AS x, ms.position_y AS y,
+              s.pos2d_x AS px, s.pos2d_y AS py
+         FROM map_systems ms LEFT JOIN solar_systems s ON s.id = ms.eve_system_id
+        WHERE ms.map_id = $1`,
       [mapId],
     ),
   ]);
@@ -1463,15 +1465,42 @@ mapsRouter.post('/:mapId/seed-region', async (req, res) => {
   }
   const regionName = regionRes.rows[0]?.name ?? 'Region';
 
-  // Lay the new region out on its own, then shift the block clear of the
-  // current content: right of the rightmost existing node, top-aligned with the
-  // topmost. Every new x is at or beyond that edge, so nothing can land on an
-  // existing node.
+  // Lay the new region out on its own, then place the block on the side of the
+  // current content that matches the region's true compass direction from it
+  // (star-map centroids, Y flipped), just clear of the content's bounding box —
+  // so Fade lands above Pure Blind, not simply to its right. Only the direction
+  // is taken from geography: regions are drawn at their own readable scale, so
+  // the true distance between them means nothing on screen. A map with no
+  // star-map positions at all (a pure wormhole chain) falls back to "due east".
+  // Every new node ends up outside that bounding box, so nothing overlaps.
   const coords = projectRegionLayout(fresh.map((s) => ({ x: s.x2 as number, y: s.y2 as number })));
   const placed = existingRes.rows.filter((e) => e.x != null && e.y != null);
-  if (placed.length) {
-    const offX = Math.max(...placed.map((e) => e.x as number)) + REGION_NODE_W + REGION_APPEND_GAP;
-    const offY = Math.min(...placed.map((e) => e.y as number));
+  if (placed.length > 0 && fresh.length > 0) {
+    const xs = placed.map((e) => e.x as number), ys = placed.map((e) => e.y as number);
+    const exW = Math.max(...xs) - Math.min(...xs) + REGION_NODE_W;
+    const exH = Math.max(...ys) - Math.min(...ys) + REGION_NODE_H;
+    const exCx = Math.min(...xs) + exW / 2, exCy = Math.min(...ys) + exH / 2;
+    const blockW = Math.max(...coords.map((c) => c.x)) + REGION_NODE_W;
+    const blockH = Math.max(...coords.map((c) => c.y)) + REGION_NODE_H;
+    let ux = 1, uy = 0;
+    const geo = placed.filter((e) => e.px != null && e.py != null);
+    if (geo.length > 0) {
+      const gx = geo.reduce((s, e) => s + (e.px as number), 0) / geo.length;
+      const gy = geo.reduce((s, e) => s + (e.py as number), 0) / geo.length;
+      const nx = fresh.reduce((s, e) => s + (e.x2 as number), 0) / fresh.length;
+      const ny = fresh.reduce((s, e) => s + (e.y2 as number), 0) / fresh.length;
+      const dx = nx - gx, dy = -(ny - gy);
+      const len = Math.hypot(dx, dy);
+      if (len > 0) { ux = dx / len; uy = dy / len; }
+    }
+    // Smallest travel along that direction at which the two boxes are clear on
+    // at least one axis.
+    const needX = (exW + blockW) / 2 + REGION_APPEND_GAP;
+    const needY = (exH + blockH) / 2 + REGION_APPEND_GAP;
+    const t = Math.min(Math.abs(ux) > 1e-6 ? needX / Math.abs(ux) : Infinity,
+                       Math.abs(uy) > 1e-6 ? needY / Math.abs(uy) : Infinity);
+    const offX = Math.round(exCx + ux * t - blockW / 2);
+    const offY = Math.round(exCy + uy * t - blockH / 2);
     for (const c of coords) { c.x += offX; c.y += offY; }
   }
 
@@ -3180,11 +3209,11 @@ mapsRouter.post('/:mapId/geographic-layout', async (req, res) => {
       const g = byRegion.get(r.regionId!);
       if (g) g.push(r); else byRegion.set(r.regionId!, [r]);
     }
-    type Blob = { pos: Map<string, Pt>; w: number; h: number };
+    type Blob = { pos: Map<string, Pt>; w: number; h: number; gx: number; gy: number }; // gx/gy: star-map centroid
     const blobs: Blob[] = [];
     for (const members of byRegion.values()) {
       if (members.length === 1) {
-        blobs.push({ pos: new Map([[members[0].id, { id: members[0].id, x: 0, y: 0 }]]), w: BOX_W, h: BOX_H });
+        blobs.push({ pos: new Map([[members[0].id, { id: members[0].id, x: 0, y: 0 }]]), w: BOX_W, h: BOX_H, gx: members[0].px!, gy: members[0].py! });
         continue;
       }
       const minX = Math.min(...members.map((m) => m.px!));
@@ -3213,18 +3242,57 @@ mapsRouter.post('/:mapId/geographic-layout', async (req, res) => {
       for (const n of nodes) pos.set(n.id, { id: n.id, x: n.x - nx, y: n.y - ny });
       const w = Math.max(...nodes.map((n) => n.x)) - nx + BOX_W;
       const h = Math.max(...nodes.map((n) => n.y)) - ny + BOX_H;
-      blobs.push({ pos, w, h });
+      const gx = members.reduce((s, m) => s + m.px!, 0) / members.length;
+      const gy = members.reduce((s, m) => s + m.py!, 0) / members.length;
+      blobs.push({ pos, w, h, gx, gy });
     }
 
-    // Level 2 — shelf-pack the region blobs into a compact ~square.
-    blobs.sort((a, b) => b.h - a.h);
-    const targetW = Math.max(BOX_W, Math.sqrt(blobs.reduce((s, b) => s + b.w * b.h, 0)) * 1.4);
+    // Level 2 — arrange the region blobs by their true compass positions.
+    // Geography is only good for DIRECTION here: each region was laid out at its
+    // own readable scale, so the true distances between regions are useless.
+    // Take every region's star-map centroid (Y flipped: screen grows down), find
+    // the smallest global scale at which every pair of blobs is clear on at
+    // least one axis, then push any residual overlaps (three-body cases) apart
+    // along the shallower axis. Compass order survives — a region north of
+    // another stays above it, so the regional gates between them stay short.
+    // A single-region map is unaffected.
     const placed = new Map<string, Pt>();
-    let cx = 0, cy = 0, rowH = 0;
-    for (const bl of blobs) {
-      if (cx > 0 && cx + bl.w > targetW) { cx = 0; cy += rowH + GAP; rowH = 0; }
-      for (const p of bl.pos.values()) placed.set(p.id, { id: p.id, x: p.x + cx + MARGIN, y: p.y + cy + MARGIN });
-      cx += bl.w + GAP; rowH = Math.max(rowH, bl.h);
+    if (blobs.length > 0) {
+      type Rect = { bl: Blob; cx: number; cy: number };
+      const rects: Rect[] = blobs.map((bl) => ({ bl, cx: bl.gx, cy: -bl.gy }));
+      let scale = 0;
+      for (let a = 0; a < rects.length; a++) {
+        for (let b = a + 1; b < rects.length; b++) {
+          const dx = Math.abs(rects[a].cx - rects[b].cx), dy = Math.abs(rects[a].cy - rects[b].cy);
+          const needX = (rects[a].bl.w + rects[b].bl.w) / 2 + GAP;
+          const needY = (rects[a].bl.h + rects[b].bl.h) / 2 + GAP;
+          const s = Math.min(dx > 0 ? needX / dx : Infinity, dy > 0 ? needY / dy : Infinity);
+          if (Number.isFinite(s)) scale = Math.max(scale, s);
+        }
+      }
+      for (const r of rects) { r.cx *= scale; r.cy *= scale; }
+      for (let iter = 0; iter < 200; iter++) {
+        let moved = false;
+        for (let a = 0; a < rects.length; a++) {
+          for (let b = a + 1; b < rects.length; b++) {
+            const dx = rects[b].cx - rects[a].cx, dy = rects[b].cy - rects[a].cy;
+            const ox = (rects[a].bl.w + rects[b].bl.w) / 2 + GAP - Math.abs(dx);
+            const oy = (rects[a].bl.h + rects[b].bl.h) / 2 + GAP - Math.abs(dy);
+            if (ox <= 0 || oy <= 0) continue;
+            if (ox < oy) { const p = (ox / 2) * (dx < 0 ? -1 : 1); rects[a].cx -= p; rects[b].cx += p; }
+            else         { const p = (oy / 2) * (dy < 0 ? -1 : 1); rects[a].cy -= p; rects[b].cy += p; }
+            moved = true;
+          }
+        }
+        if (!moved) break;
+      }
+      const minX = Math.min(...rects.map((r) => r.cx - r.bl.w / 2));
+      const minY = Math.min(...rects.map((r) => r.cy - r.bl.h / 2));
+      for (const r of rects) {
+        const ox = r.cx - r.bl.w / 2 - minX + MARGIN;
+        const oy = r.cy - r.bl.h / 2 - minY + MARGIN;
+        for (const p of r.bl.pos.values()) placed.set(p.id, { id: p.id, x: p.x + ox, y: p.y + oy });
+      }
     }
     for (const p of lockedPos.values()) placed.set(p.id, p); // fixed reference points
 
