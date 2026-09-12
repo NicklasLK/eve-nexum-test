@@ -36,6 +36,7 @@ import { seedDiscordWebhooksFromEnv } from './services/discordSeed.js';
 import { seedAccessGrantsFromEnv } from './services/accessGrantsSeed.js';
 import { expireIdleOrgMaps, expireOrphanPersonalMaps } from './services/mapCleanup.js';
 import { startSdeAutoUpdate } from './services/sdeUpdate.js';
+import { runNetProbe } from './services/netProbe.js';
 import { startLocationPoller } from './services/locationPoll.js';
 import { startWhSweeper } from './services/whSweep.js';
 import { startConnLifetimeSweeper } from './services/connLifetimeSweep.js';
@@ -195,6 +196,8 @@ migrate()
     await loadRouteGraph();
     app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
     startSdeAutoUpdate();
+    // Opt-in outbound diagnostics (NEXUM_NET_PROBE=host,...); see netProbe.ts.
+    if (process.env.NEXUM_NET_PROBE) void runNetProbe(process.env.NEXUM_NET_PROBE);
     startLocationPoller();
     startWhSweeper();
     startConnLifetimeSweeper();
