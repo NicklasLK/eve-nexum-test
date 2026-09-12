@@ -6,7 +6,7 @@ import { XIcon } from '../../icons';
 import { Select } from './Select';
 import { api } from '../../api/client';
 import { toast } from '../../utils/toastStore';
-import { useEsiSearch, systemResultLabel } from '../../hooks/useEsiSearch';
+import { SystemSearchField, lowNullFilter, type PickedSystem } from './SystemSearchField';
 import { useUserSetting } from '../../hooks/useUserSetting';
 import { useAuth } from '../../context/AuthContext';
 import { truesecColor } from '../../utils/truesec';
@@ -58,7 +58,7 @@ interface PlanResp {
   coords: Record<number, { x: number; y: number }>;
   sources: { scoutHoles: number; wormholes: number; bridges: number; services: number; capitalEdges: number };
 }
-type Picked = { id: number; name: string } | null;
+type Picked = PickedSystem;
 
 const CAPITAL = new Set<Method>(['titan_bridge', 'blops_bridge', 'carrier_conduit']);
 const METHOD_COLOR: Record<Method, string> = {
@@ -137,8 +137,8 @@ export function FleetRoutesModal({ onClose }: { onClose: () => void }) {
         <div className="modal__body" style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: 16, overflow: 'auto', minHeight: 0, flex: 1 }}>
           {/* Options column */}
           <div style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <SystemField label={t('fleetRoutes.from')} value={from} onPick={setFrom} />
-            <SystemField label={t('fleetRoutes.to')} value={to} onPick={setTo} />
+            <SystemSearchField label={t('fleetRoutes.from')} value={from} onPick={setFrom} />
+            <SystemSearchField label={t('fleetRoutes.to')} value={to} onPick={setTo} />
 
             <Section title={t('fleetRoutes.travelBy')}>
               <Check label={t('fleetRoutes.stargates')} checked={opts.useStargates} onChange={(v) => set('useStargates', v)} />
@@ -409,7 +409,7 @@ function MyBridgesDrawer({ onChanged }: { onChanged: () => void }) {
   const [exB, setExB] = useState<Set<number>>(new Set());
   const [exS, setExS] = useState<Set<number>>(new Set());
   const [bFrom, setBFrom] = useState(''); const [bTo, setBTo] = useState('');
-  const [sSys, setSSys] = useState(''); const [sKind, setSKind] = useState<'titan' | 'blops' | 'conduit'>('titan'); const [sName, setSName] = useState('');
+  const [sSys, setSSys] = useState<PickedSystem>(null); const [sKind, setSKind] = useState<'titan' | 'blops' | 'conduit'>('titan'); const [sName, setSName] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
@@ -438,11 +438,11 @@ function MyBridgesDrawer({ onChanged }: { onChanged: () => void }) {
     finally { setBusy(false); }
   };
   const addService = async () => {
-    if (!sSys.trim()) return;
+    if (!sSys) return;
     setBusy(true);
     try {
-      await api('/api/bridge-services', { method: 'POST', body: JSON.stringify({ system: sSys.trim(), kind: sKind, name: sName.trim(), scope: 'personal' }) });
-      setSSys(''); setSName(''); await load(); onChanged();
+      await api('/api/bridge-services', { method: 'POST', body: JSON.stringify({ system: sSys.id, kind: sKind, name: sName.trim(), scope: 'personal' }) });
+      setSSys(null); setSName(''); await load(); onChanged();
     } catch { toast.error(t('fleetRoutes.unknownSystem')); }
     finally { setBusy(false); }
   };
@@ -502,7 +502,7 @@ function MyBridgesDrawer({ onChanged }: { onChanged: () => void }) {
             </div>
           ))}
           <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-            <input className="chains-new__name" style={{ flex: '1 1 90px' }} placeholder={t('fleetRoutes.systemLowNull')} value={sSys} onChange={(e) => setSSys(e.target.value)} />
+            <div style={{ flex: '1 1 120px' }}><SystemSearchField value={sSys} onPick={setSSys} filter={lowNullFilter} placeholder={t('fleetRoutes.systemLowNull')} compact /></div>
             <Select value={sKind} onChange={setSKind} ariaLabel={t('fleetRoutes.serviceKind')} options={(['titan', 'blops', 'conduit'] as const).map((k) => ({ value: k, label: kindLabel(k) }))} />
             <input className="chains-new__name" style={{ flex: '1 1 90px' }} placeholder={t('fleetRoutes.notes')} value={sName} onChange={(e) => setSName(e.target.value)} />
             <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={addService}>{t('actions.add', { defaultValue: 'Add' })}</button>
@@ -552,39 +552,5 @@ function Tri({ label, value, onChange }: { label: string; value: Level; onChange
         ))}
       </span>
     </Row>
-  );
-}
-
-/** Any-system search field (k-space and J-space alike). */
-function SystemField({ label, value, onPick }: { label: string; value: Picked; onPick: (v: Picked) => void }) {
-  const { t } = useTranslation();
-  const [query, setQuery] = useState('');
-  const { results, loading } = useEsiSearch(query);
-  const show = query.trim().length >= 2 && (results.length > 0 || loading);
-  return (
-    <div style={{ position: 'relative' }}>
-      <div style={{ fontSize: 12, color: 'var(--text-subtle)', marginBottom: 3 }}>{label}</div>
-      {value ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px' }}>
-          <strong>{value.name}</strong>
-          <button type="button" className="icon-btn" onClick={() => onPick(null)} title={t('jumpPlanner.change')}><XIcon size={12} /></button>
-        </div>
-      ) : (
-        <input className="chains-new__name" style={{ width: '100%' }} type="text" value={query}
-          placeholder={t('jumpPlanner.searchSystem')} onChange={(e) => setQuery(e.target.value)} />
-      )}
-      {!value && show && (
-        <ul className="search-results">
-          {loading && <li className="search-results__item" style={{ cursor: 'default', opacity: 0.6 }}>{t('jumpPlanner.searching')}</li>}
-          {results.map((r) => (
-            <li key={r.id} className="search-results__item" role="option"
-              onMouseDown={(e) => { e.preventDefault(); onPick({ id: r.id, name: r.name }); setQuery(''); }}>
-              <span>{r.name}</span>
-              <span className="search-results__class">{systemResultLabel(r)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }

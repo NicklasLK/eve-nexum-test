@@ -8,6 +8,7 @@ import { timeAgo, DASH } from '../../i18n/format';
 import { XIcon } from '../../icons';
 import { ConfirmModal } from './ConfirmModal';
 import { Select } from './Select';
+import { SystemSearchField, lowNullFilter, type PickedSystem } from './SystemSearchField';
 import styles from './AdminPage.module.css';
 
 // Admin › Jump bridges and Admin › Bridge services: the shared data the fleet
@@ -238,7 +239,7 @@ export function BridgeServicesTab() {
   const { t } = useTranslation();
   const [data, setData] = useState<ServicesResp | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [system, setSystem] = useState(''); const [kind, setKind] = useState<Kind>('titan'); const [range, setRange] = useState(''); const [name, setName] = useState('');
+  const [system, setSystem] = useState<PickedSystem>(null); const [kind, setKind] = useState<Kind>('titan'); const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<Service | null>(null);
 
@@ -250,11 +251,12 @@ export function BridgeServicesTab() {
   useEffect(() => { void load(); }, [load]);
 
   const add = async () => {
-    if (!system.trim()) return;
+    if (!system) return;
     setBusy(true);
     try {
-      await api('/api/bridge-services', { method: 'POST', body: JSON.stringify({ system: system.trim(), kind, rangeLy: range.trim() || null, name: name.trim(), scope: 'shared' }) });
-      setSystem(''); setRange(''); setName(''); await load();
+      // Range always comes from the service type (server default per kind).
+      await api('/api/bridge-services', { method: 'POST', body: JSON.stringify({ system: system.id, kind, rangeLy: null, name: name.trim(), scope: 'shared' }) });
+      setSystem(null); setName(''); await load();
     } catch (err) { toast.error(err instanceof ApiError && err.code ? err.code : t('fleetRoutes.saveFailed')); }
     finally { setBusy(false); }
   };
@@ -272,24 +274,19 @@ export function BridgeServicesTab() {
       {error && <div className={styles.pgError}>{error}</div>}
 
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, padding: 12, background: 'var(--surface-well)', border: '1px solid var(--border)', borderRadius: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 200, fontSize: 12, color: 'var(--text-subtle)' }}>
-          {t('fleetRoutes.admin.system')}
-          <input className="chains-new__name" value={system} onChange={(e) => setSystem(e.target.value)} placeholder={t('fleetRoutes.systemLowNull')} />
-        </label>
+        <div style={{ width: 240 }}>
+          <SystemSearchField label={t('fleetRoutes.admin.system')} value={system} onPick={setSystem} filter={lowNullFilter} placeholder={t('fleetRoutes.systemLowNull')} compact />
+        </div>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--text-subtle)' }}>
           {t('fleetRoutes.admin.service')}
           <Select value={kind} onChange={setKind} ariaLabel={t('fleetRoutes.admin.service')}
             options={(['titan', 'blops', 'conduit'] as Kind[]).map((k) => ({ value: k, label: `${kindLabel(k)} · ${defaults[k]} ly` }))} />
         </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 90, fontSize: 12, color: 'var(--text-subtle)' }}>
-          {t('fleetRoutes.admin.range')}
-          <input className="chains-new__name" type="number" step={0.1} min={0.1} max={20} value={range} onChange={(e) => setRange(e.target.value)} placeholder={String(defaults[kind])} />
-        </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 160, fontSize: 12, color: 'var(--text-subtle)' }}>
           {t('fleetRoutes.admin.notes')}
           <input className="chains-new__name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('fleetRoutes.admin.notesPlaceholder')} />
         </label>
-        <button type="button" className="btn btn--primary" disabled={busy || !system.trim()} onClick={add}>{t('fleetRoutes.admin.addService')}</button>
+        <button type="button" className="btn btn--primary" disabled={busy || !system} onClick={add}>{t('fleetRoutes.admin.addService')}</button>
       </div>
 
       {data === null ? <div className={styles.pgLoading}>…</div> : data.shared.length === 0 ? (

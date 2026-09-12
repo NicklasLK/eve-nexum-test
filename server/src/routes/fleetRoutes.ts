@@ -77,13 +77,16 @@ router.post('/', async (req, res) => {
       mapIds, ownerId,
     });
     const routes = calculateRoutes(graph, from.id, to.id, options, maxRoutes).map((r) => routeToJson(r, graph));
-    // Star-map coordinates (CCP's 2D projection) for the route map; J-space
-    // systems have none and are interpolated client-side.
+    // Star-map coordinates (CCP's 2D projection) for the route map. Only the
+    // projection is used: J-space systems have none, and their raw galactic
+    // position sits far outside the k-space map, so mixing the two scales
+    // piles every k-space system into one corner. Missing ones are
+    // interpolated client-side.
     const ids = [...new Set(routes.flatMap((r) => r.systems.map((s) => s.id)))];
     const coords: Record<number, { x: number; y: number }> = {};
     if (ids.length) {
       const { rows } = await db.query<{ id: number; x: number | null; y: number | null }>(
-        `SELECT id, COALESCE(pos2d_x, pos_x) AS x, COALESCE(pos2d_y, pos_z) AS y FROM solar_systems WHERE id = ANY($1::int[])`, [ids]);
+        `SELECT id, pos2d_x AS x, pos2d_y AS y FROM solar_systems WHERE id = ANY($1::int[])`, [ids]);
       for (const r of rows) if (r.x != null && r.y != null) coords[r.id] = { x: r.x, y: r.y };
     }
     log.info(`${from.name} → ${to.name}: ${routes.length} route(s) in ${Date.now() - started} ms`);
