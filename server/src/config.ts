@@ -195,6 +195,16 @@ export const config = {
   // pre-existing behaviour while it's off.
   cloneScope: /^(1|true|yes|on)$/i.test(process.env.ESI_CLONES_SCOPE ?? ''),
 
+  // UI features this deployment does not use, hidden from the toolbar, side
+  // panels and system panel so members are not offered dead ends. Comma-
+  // separated; known names: killboard (per-system zKillboard tab + live kill
+  // log), fleet (fleet-member tracking pane and toggles), clones. The kill log
+  // is also hidden whenever KILL_FEED is off, and clones whenever
+  // ESI_CLONES_SCOPE is off, without listing them here.
+  hiddenFeatures: new Set(
+    (process.env.HIDDEN_FEATURES ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+  ),
+
   // ── ISK for extra maps (unrestricted installs only) ─────────────────────────
   // Lets a public deployment hand out extra PERSONAL maps in exchange for an
   // in-game ISK donation: the nominated corporation's wallet journal is polled,

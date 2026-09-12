@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { timeAgo, jumps } from '../../i18n/format';
 import { useMapStore } from '../../store/mapStore';
-import { useAuth, formatRole, isAdminRole } from '../../context/AuthContext';
+import { useAuth, formatRole, isAdminRole, featuresOf } from '../../context/AuthContext';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useCharacterLocation, useCharacterLocationCheckedAt } from '../../hooks/useCharacterLocation';
 import { useSystemAlias } from '../../hooks/useSystemAlias';
@@ -264,6 +264,7 @@ export function Toolbar() {
   const atMapLimit      = maps.filter((m) => !m.isCorpMap && !m.isAllianceMap && !m.sharedWithMe).length >= maxMaps;
   const atCorpMapLimit  = corpMapCount >= maxCorpMaps;
   const { user, logout } = useAuth();
+  const features = featuresOf(user);
   const canEdit       = useCanEdit();
   const canEditContent = useCanEditContent();
   const isMapOwner    = useIsMapOwner();
@@ -601,14 +602,16 @@ export function Toolbar() {
           <GraphIcon size={18} weight="regular" />
         </button>
 
-        <button
-          className="toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent"
-          onClick={() => setShowKillLog(true)}
-          data-tooltip={t('killLog.tooltip')}
-          aria-label={t('killLog.title')}
-        >
-          <SkullIcon size={18} weight="regular" />
-        </button>
+        {features.killFeed && (
+          <button
+            className="toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent"
+            onClick={() => setShowKillLog(true)}
+            data-tooltip={t('killLog.tooltip')}
+            aria-label={t('killLog.title')}
+          >
+            <SkullIcon size={18} weight="regular" />
+          </button>
+        )}
 
         <button
           className="toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent"

@@ -21,6 +21,7 @@ import { StructuresPane } from './StructuresPane';
 import { NpcStationsPane } from './NpcStationsPane';
 import { NotesEditor } from './NotesEditor';
 import { KillboardPane } from './KillboardPane';
+import { useAuth, featuresOf } from '../../context/AuthContext';
 import { ActivityPane } from './ActivityPane';
 import { useStandings, type ContactKind } from '../../hooks/useStandings';
 import { toast } from '../../utils/toastStore';
@@ -185,6 +186,8 @@ function clamp(v: number) {
 
 export function SystemPanel() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const features = featuresOf(user);
   const whTypes = useWormholeTypes();
   const panelTitle: Record<string, string> = {
     notes:       t('panel.notes'),
@@ -389,6 +392,8 @@ export function SystemPanel() {
   // Whether each pane still renders in share mode (guests only see the
   // categories the owner opted into at link time).
   const shareVisible = (id: string): boolean => {
+    // Deployment-level switch first: a hidden feature stays hidden for everyone.
+    if (id === 'killboard' && !features.killboard) return false;
     if (!isShareMode) return true;
     if (id === 'notes')      return shareIncludesNotes;
     if (id === 'structures') return shareIncludesStructures;

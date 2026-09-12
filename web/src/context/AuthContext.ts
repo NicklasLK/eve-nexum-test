@@ -43,6 +43,20 @@ export interface AccountCharacter {
   active: boolean;
 }
 
+export interface DeploymentFeatures {
+  killFeed:  boolean;   // live kill log (KILL_FEED)
+  killboard: boolean;   // per-system zKillboard tab
+  fleet:     boolean;   // fleet-member tracking pane + toggles
+  clones:    boolean;   // clones pane (ESI_CLONES_SCOPE)
+}
+
+const ALL_FEATURES_ON: DeploymentFeatures = { killFeed: true, killboard: true, fleet: true, clones: true };
+
+/** The deployment's feature switches, defaulting to on when the server predates them. */
+export function featuresOf(user: { features?: Partial<DeploymentFeatures> } | null | undefined): DeploymentFeatures {
+  return { ...ALL_FEATURES_ON, ...(user?.features ?? {}) };
+}
+
 export interface AuthUser {
   id: number;
   characterId: number;
@@ -68,6 +82,8 @@ export interface AuthUser {
   uiSettings: Record<string, unknown>;
   panelOrder: string[];
   canViewReports: boolean;
+  /** Optional features this deployment runs; absent fields mean "on" (older servers). */
+  features?: Partial<DeploymentFeatures>;
   /** External read API (/api/v1) is switched off — the UI disables API-key creation. */
   externalApiDisabled?: boolean;
 }

@@ -741,6 +741,14 @@ authRouter.get('/me', async (req, res) => {
       canViewReports: config.reportsCharId !== null && req.session.characterId === config.reportsCharId,
       // When the external API is off, the UI hides/disables API-key creation.
       externalApiDisabled: config.externalApiDisabled,
+      // Which optional features this deployment runs; the UI hides the rest
+      // (HIDDEN_FEATURES, KILL_FEED, ESI_CLONES_SCOPE — see config.ts).
+      features: {
+        killFeed:  config.killFeed.enabled && !config.hiddenFeatures.has('killboard'),
+        killboard: !config.hiddenFeatures.has('killboard'),
+        fleet:     !config.hiddenFeatures.has('fleet'),
+        clones:    config.cloneScope && !config.hiddenFeatures.has('clones'),
+      },
     },
   });
 });

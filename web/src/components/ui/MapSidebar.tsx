@@ -8,7 +8,7 @@ import {
 } from "../../hooks/useNotificationPermission";
 import { expiresIn } from "../../i18n/format";
 import { useMapStore } from "../../store/mapStore";
-import { useAuth, isAdminRole, isAllianceAdminRole, type Role } from "../../context/AuthContext";
+import { useAuth, isAdminRole, isAllianceAdminRole, featuresOf, type Role } from "../../context/AuthContext";
 import { api } from "../../api/client";
 import { toast } from '../../utils/toastStore';
 import { Select } from "./Select";
@@ -851,6 +851,7 @@ export function MapSidebar() {
   const [patchNotesOpen, setPatchNotesOpen] = useState(false);
   const notifPermission = useNotificationPermission();
   const { user } = useAuth();
+  const features = featuresOf(user);
   const isCorpMap = useMapStore((s) => !!s.map.isCorpMap);
   const isAllianceMap = useMapStore((s) => !!s.map.isAllianceMap);
   const isMapOwner = useIsMapOwner();
@@ -1408,6 +1409,14 @@ export function MapSidebar() {
             defaultOn={false}
           />
           <div className="map-sidebar__hint">{t("mapSidebar.hidePresenceHint")}</div>
+          {/* Lives in the Fleet section normally; kept reachable here when the
+              deployment hides fleet tracking (it is about your own alts). */}
+          {!features.fleet && (
+            <SettingToggle
+              settingKey="nexum.account.showOnMap"
+              label={t("mapSidebar.showAccountChars")}
+            />
+          )}
         </CollapsibleSection>
 
         <CollapsibleSection title={t("mapSidebar.sections.route")} {...sectionProps("route")}>
@@ -1598,19 +1607,21 @@ export function MapSidebar() {
           />
         </CollapsibleSection>
 
-        <CollapsibleSection title={t("mapSidebar.sections.fleet")} {...sectionProps("fleet")}>
-          <div className="map-sidebar__hint">
-            {t("mapSidebar.fleetHint")}
-          </div>
-          <SettingToggle
-            settingKey="nexum.fleet.showMembers"
-            label={t("mapSidebar.showFleetMembers")}
-          />
-          <SettingToggle
-            settingKey="nexum.account.showOnMap"
-            label={t("mapSidebar.showAccountChars")}
-          />
-        </CollapsibleSection>
+        {features.fleet && (
+          <CollapsibleSection title={t("mapSidebar.sections.fleet")} {...sectionProps("fleet")}>
+            <div className="map-sidebar__hint">
+              {t("mapSidebar.fleetHint")}
+            </div>
+            <SettingToggle
+              settingKey="nexum.fleet.showMembers"
+              label={t("mapSidebar.showFleetMembers")}
+            />
+            <SettingToggle
+              settingKey="nexum.account.showOnMap"
+              label={t("mapSidebar.showAccountChars")}
+            />
+          </CollapsibleSection>
+        )}
 
         {!hideTopologyTools && (
           <CollapsibleSection

@@ -15,7 +15,7 @@ import { WatchlistBlock } from './WatchlistBlock';
 import { ChainsPane } from './ChainsPane';
 import { CaretLeftIcon, CaretRightIcon, ArrowLineLeftIcon, ArrowLineRightIcon } from '../../icons';
 import { useUserSetting } from '../../hooks/useUserSetting';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, featuresOf } from '../../context/AuthContext';
 
 const SIDE_KEY      = 'nexum.sidebar.side';
 const COLLAPSED_KEY = 'nexum.sidebar.collapsed';
@@ -151,7 +151,11 @@ export function Sidebar() {
   // in the position the user put it if the deployment later gains a corp or
   // alliance.
   const orgInstall   = !!user?.corpMode || !!user?.allianceMode;
-  const visibleOrder = order.filter((id) => id !== 'pilotsOnline' || orgInstall);
+  const features     = featuresOf(user);
+  const visibleOrder = order.filter((id) =>
+    (id !== 'pilotsOnline' || orgInstall)
+    && (id !== 'fleet' || features.fleet)
+    && (id !== 'clones' || features.clones));
 
   const cards: Record<PanelId, ReactNode> = {
     watchlist: <WatchlistBlock />,
