@@ -48,8 +48,29 @@ interface RawScoutEntry {
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min — eve-scout updates frequently
 const cache = new TtlValue<ScoutConnection[]>(CACHE_TTL_MS);
 
+const SCOUT_URL        = 'https://api.eve-scout.com/v2/public/signatures';
+const SCOUT_TIMEOUT_MS = 15_000;
+// eve-scout asks API consumers to identify themselves; a blank UA is also the
+// first thing a CDN front door drops.
+const SCOUT_USER_AGENT = 'Eve-Nexum (self-hosted; +https://github.com/GQuantrill/eve-nexum)';
+
 async function fetchAndBuild(): Promise<ScoutConnection[]> {
-  const res = await fetch('https://api.eve-scout.com/v2/public/signatures');
+  let res: Response;
+  try {
+    res = await fetch(SCOUT_URL, {
+      signal:  AbortSignal.timeout(SCOUT_TIMEOUT_MS),
+      headers: { 'User-Agent': SCOUT_USER_AGENT, Accept: 'application/json' },
+    });
+  } catch (err) {
+    // undici reports every transport failure as "TypeError: fetch failed" and
+    // buries the reason (ENOTFOUND, ECONNRESET, a TLS error, the connect
+    // timeout…) in `cause`, which the logger's Error → "Name: message"
+    // reduction drops. Rethrow with the reason in the message so the log line
+    // says what actually went wrong.
+    const cause = (err as { cause?: { code?: string; message?: string } }).cause;
+    const why   = cause?.code ?? cause?.message ?? (err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+    throw new Error(`eve-scout unreachable (${why})`);
+  }
   if (!res.ok) throw new Error(`eve-scout ${res.status}`);
   const list = await res.json() as RawScoutEntry[];
   return list
