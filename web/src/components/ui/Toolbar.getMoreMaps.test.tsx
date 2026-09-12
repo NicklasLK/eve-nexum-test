@@ -9,6 +9,7 @@ vi.mock('../../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 1, characterId: 100, characterName: 'Pilot', role: 'full', characters: [] }, logout: vi.fn() }),
   formatRole: (r: string) => r,
   isAdminRole: () => false,
+  featuresOf: () => ({ killFeed: true, killboard: true, fleet: true, clones: true }),
 }));
 vi.mock('../../api/client', () => ({ api: vi.fn(async () => ({})), apiUrl: (p: string) => p }));
 vi.mock('../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => ({ online: true, lastLogin: null }) }));
