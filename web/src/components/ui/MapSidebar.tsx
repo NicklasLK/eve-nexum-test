@@ -19,6 +19,7 @@ import {
   type MinimapPosition,
 } from "../../hooks/useMinimapPosition";
 import { useUserSetting } from "../../hooks/useUserSetting";
+import { PANEL_COLS_KEY, MAX_PANEL_COLS, clampPanelCols } from "../../utils/panelCols";
 import { normalizePlacement } from "../../hooks/useLocationTracking";
 import { NOTIFY, notifyDefault, EXITS_MIN_SECURITY_KEY, EXITS_MIN_SECURITY_DEFAULT } from "../../utils/notificationPrefs";
 import { useResettableState } from "../../hooks/useResettableState";
@@ -917,6 +918,8 @@ export function MapSidebar() {
   const panelSideBySide = useMapStore((s) => s.panelSideBySide);
   const [exitsMinSec, setExitsMinSec] = useUserSetting<number>(EXITS_MIN_SECURITY_KEY, EXITS_MIN_SECURITY_DEFAULT);
   const setPanelSideBySide = useMapStore((s) => s.setPanelSideBySide);
+  const [panelColsRaw, setPanelCols] = useUserSetting<number>(PANEL_COLS_KEY, 1);
+  const panelCols = clampPanelCols(panelColsRaw);
   const setCompactMode = useMapStore((s) => s.setCompactMode);
   const showMinimap = useMapStore((s) => s.showMinimap);
   const setShowMinimap = useMapStore((s) => s.setShowMinimap);
@@ -1209,6 +1212,32 @@ export function MapSidebar() {
               {panelSideBySide ? t("mapSidebar.panelBeside") : t("mapSidebar.panelBelow")}
             </button>
           </div>
+
+          {/* Column count for the docked pane stack. Only the below-map
+              layout has the width for it — beside the map the stack is
+              always one column, so the picker is disabled there. */}
+          <div className="map-sidebar__row">
+            <label className="map-sidebar__label">{t("mapSidebar.panelColumns")}</label>
+            <div
+              className="map-sidebar__btn-group map-sidebar__btn-group--row"
+              role="group"
+              aria-label={t("mapSidebar.panelColumns")}
+            >
+              {Array.from({ length: MAX_PANEL_COLS }, (_, i) => i + 1).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`map-sidebar__btn-group-item${panelCols === n ? " map-sidebar__btn-group-item--active" : ""}`}
+                  onClick={() => setPanelCols(n)}
+                  aria-pressed={panelCols === n}
+                  disabled={panelSideBySide}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="map-sidebar__help">{t("mapSidebar.panelColumnsHelp")}</p>
 
           <div className="map-sidebar__row">
             <label className="map-sidebar__label">{t("mapSidebar.compact")}</label>

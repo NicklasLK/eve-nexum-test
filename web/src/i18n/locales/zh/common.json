@@ -1463,6 +1463,8 @@
     "optimizeConnections": "⟳ 优化连接",
     "panelBelow": "地图下方",
     "panelBeside": "地图旁",
+    "panelColumns": "面板列数",
+    "panelColumnsHelp": "地图下方的面板分为几列显示。仅对“地图下方”布局生效；窗口过窄时会自动减少列数。",
     "panelLayout": "面板布局",
     "patchNotesEmpty": "暂无更新日志。",
     "patchNotesFailed": "无法加载更新日志。",

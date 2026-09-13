@@ -1688,6 +1688,28 @@
   gap: 4px;
 }
 
+/* Horizontal variant — a short row of equal-width choices (panel columns). */
+.map-sidebar__btn-group--row {
+  flex-direction: row;
+  gap: 6px;
+
+  /* The settings row is space-between, so the group sizes to its content;
+     give each choice a tappable width rather than letting "1" shrink-wrap. */
+  > .map-sidebar__btn-group-item {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 34px;
+    padding: 6px 8px;
+    text-align: center;
+  }
+
+  > .map-sidebar__btn-group-item:disabled {
+    opacity: 0.45;
+    cursor: default;
+    pointer-events: none;
+  }
+}
+
 /* Copy Map "new map type" picker — buttons side by side, equal width. */
 .copymap__type-group { display: flex; gap: 6px; }
 .copymap__type-btn {

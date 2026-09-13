@@ -1696,6 +1696,8 @@
     "optimizeConnections": "⟳ Optimize Connections",
     "panelBelow": "Below map",
     "panelBeside": "Beside map",
+    "panelColumns": "Panel columns",
+    "panelColumnsHelp": "How many columns the panes under the map are laid out in. Only applies to the below-map layout; fewer columns are used when the window is too narrow.",
     "panelLayout": "Panel layout",
     "patchNotesEmpty": "No patch notes yet.",
     "patchNotesFailed": "Couldn't load patch notes.",

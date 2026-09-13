@@ -7,7 +7,7 @@ import { useSystemInfo } from '../../hooks/useSystemInfo';
 import { setDestination, addWaypoint } from '../../api/waypoint';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy, rectSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { useMapStore } from '../../store/mapStore';
 import { CLASS_COLORS, CLASS_LABELS, EFFECT_LABELS, EFFECT_MODIFIERS } from '../../data/wormholes';
 import { useWormholeTypes } from '../../hooks/useWormholeTypes';
@@ -35,6 +35,7 @@ import { useCustomIntel } from '../../hooks/useCustomIntel';
 import { resolveIntelColor, resolveIntelLabel } from '../../utils/intelColors';
 import { WHTypeInfo } from './WHTypeInfo';
 import { Tooltip } from './Tooltip';
+import { PANEL_COLS_KEY, clampPanelCols } from '../../utils/panelCols';
 import styles from './SystemPanel.module.css';
 
 /**
@@ -222,6 +223,9 @@ export function SystemPanel() {
   // default 460x320 every time.
   const [lastFloatGeo, setLastFloatGeo] = useUserSetting<Record<string, PanelGeometry>>('nexum.floatingPanelsLast', {});
   const [topFloat, setTopFloat] = useState<string | null>(null);
+
+  // Docked stack column count. Cross-device like the other panel prefs.
+  const [panelColsSetting] = useUserSetting<number>(PANEL_COLS_KEY, 1);
 
   const [height, setHeight] = useState(() => {
     const v = localStorage.getItem(HEIGHT_KEY);
@@ -444,6 +448,14 @@ export function SystemPanel() {
 
   // Docked (stacked) panes = order minus anything floating, minus share-hidden.
   const dockedIds = panelOrder.filter((id) => !floatingPanels[id]).filter(shareVisible);
+  // Column mode is a ~460px strip beside the map — no room for more than one
+  // column there, so the setting only applies to the below-the-map layout.
+  // `panelOrder` stays a flat list: index 0 is top-left, 1 sits to its right,
+  // and so on. dnd-kit's rect strategy sorts by measured boxes, so dragging a
+  // card across columns works without any change to the drag handler; the
+  // vertical strategy is kept for one column so that path is untouched.
+  const panelCols = sideBySide ? 1 : clampPanelCols(panelColsSetting);
+  const stackIsGrid = panelCols > 1;
   // Floating panes that are still valid ids and share-visible.
   const floatingIds = Object.keys(floatingPanels).filter((id) => cards[id] && shareVisible(id));
 
@@ -828,8 +840,11 @@ export function SystemPanel() {
         )}
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={dockedIds} strategy={verticalListSortingStrategy}>
-            <div className="panel-stack">
+          <SortableContext items={dockedIds} strategy={stackIsGrid ? rectSortingStrategy : verticalListSortingStrategy}>
+            <div
+              className={`panel-stack${stackIsGrid ? ' panel-stack--grid' : ''}`}
+              style={stackIsGrid ? { '--panel-cols': panelCols } as React.CSSProperties : undefined}
+            >
               {dockedIds.map((id) => (
                 <DraggableCard
                   key={id}

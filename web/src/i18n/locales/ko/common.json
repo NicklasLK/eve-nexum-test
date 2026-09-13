@@ -1463,6 +1463,8 @@
     "optimizeConnections": "⟳ 연결 최적화",
     "panelBelow": "지도 아래",
     "panelBeside": "지도 옆",
+    "panelColumns": "패널 열 수",
+    "panelColumnsHelp": "지도 아래의 패널을 몇 개의 열로 배치할지 설정합니다. 지도 아래 배치에만 적용되며, 창이 너무 좁으면 열 수가 자동으로 줄어듭니다.",
     "panelLayout": "패널 배치",
     "patchNotesEmpty": "아직 패치 노트가 없습니다.",
     "patchNotesFailed": "패치 노트를 불러오지 못했습니다.",

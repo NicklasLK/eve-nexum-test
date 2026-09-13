@@ -1463,6 +1463,8 @@
     "optimizeConnections": "⟳ Optimiser les connexions",
     "panelBelow": "Sous la carte",
     "panelBeside": "À côté de la carte",
+    "panelColumns": "Colonnes du panneau",
+    "panelColumnsHelp": "Nombre de colonnes sur lesquelles les volets sous la carte sont répartis. Ne s’applique qu’à la disposition sous la carte ; moins de colonnes sont utilisées si la fenêtre est trop étroite.",
     "panelLayout": "Disposition du panneau",
     "patchNotesEmpty": "Aucune note de version pour l'instant.",
     "patchNotesFailed": "Impossible de charger les notes de version.",

@@ -1463,6 +1463,8 @@
     "optimizeConnections": "⟳ Optimizar conexiones",
     "panelBelow": "Debajo del mapa",
     "panelBeside": "Junto al mapa",
+    "panelColumns": "Columnas del panel",
+    "panelColumnsHelp": "En cuántas columnas se distribuyen los paneles bajo el mapa. Solo se aplica al diseño debajo del mapa; si la ventana es demasiado estrecha se usan menos columnas.",
     "panelLayout": "Diseño del panel",
     "patchNotesEmpty": "Aún no hay notas de versión.",
     "patchNotesFailed": "No se pudieron cargar las notas.",

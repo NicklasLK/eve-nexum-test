@@ -1463,6 +1463,8 @@
     "optimizeConnections": "⟳ Verbindungen optimieren",
     "panelBelow": "Unter Karte",
     "panelBeside": "Neben Karte",
+    "panelColumns": "Panel-Spalten",
+    "panelColumnsHelp": "In wie vielen Spalten die Bereiche unter der Karte angeordnet werden. Gilt nur für das Layout unter der Karte; bei zu schmalem Fenster werden weniger Spalten verwendet.",
     "panelLayout": "Panel-Layout",
     "patchNotesEmpty": "Noch keine Patchnotes.",
     "patchNotesFailed": "Patchnotes konnten nicht geladen werden.",

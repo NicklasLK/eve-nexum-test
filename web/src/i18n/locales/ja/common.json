@@ -1463,6 +1463,8 @@
     "optimizeConnections": "⟳ 接続を最適化",
     "panelBelow": "マップの下",
     "panelBeside": "マップの横",
+    "panelColumns": "パネルの列数",
+    "panelColumnsHelp": "マップ下のペインを何列で配置するか。マップの下の配置にのみ適用されます。ウィンドウが狭すぎる場合は列数が自動的に減ります。",
     "panelLayout": "パネルの配置",
     "patchNotesEmpty": "まだパッチノートがありません。",
     "patchNotesFailed": "パッチノートを読み込めませんでした。",
