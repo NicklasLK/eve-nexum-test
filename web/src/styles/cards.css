@@ -14,28 +14,23 @@
 }
 
 /* Multi-column stack (below-the-map layout only; SystemPanel forces one column
-   beside the map). --panel-cols is the user's pick, 2..4. The track floor is
-   the larger of a readable minimum and an even share of the width, so the
-   browser never lays out MORE columns than asked for, and drops to fewer on
-   its own when the stack is too narrow to give each one that minimum — four
-   columns on a laptop degrade to two, not to four unusable slivers. The -1px
-   keeps float rounding from tipping an exact N-way split down to N-1. */
-.panel-stack--grid {
-  display: grid;
-  grid-template-columns: repeat(
-    auto-fit,
-    minmax(
-      max(300px, calc((100% - (var(--panel-cols) - 1) * 6px) / var(--panel-cols) - 1px)),
-      1fr
-    )
-  );
-  /* Each card keeps its own height rather than stretching to its row-mate's. */
-  align-items: start;
-  align-content: start;
+   beside the map, and decides how many columns fit — see utils/panelCols).
+   The stack turns into a row of equal-width columns, each of which is the
+   same vertical card stack as the one-column dock. Columns are independent,
+   so a tall card in one leaves no hole beside it in the next. */
+.panel-stack--cols {
+  flex-direction: row;
+  align-items: flex-start;
+}
 
-  /* Grid items default to min-width:auto, which lets a wide table push its
-     card past the track instead of the card's own overflow clipping it. */
-  > .info-card { min-width: 0; }
+.panel-stack__col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 0;
+  /* Flex items default to min-width:auto; without this a wide signatures
+     table would widen its column instead of scrolling inside its card. */
+  min-width: 0;
 }
 
 .info-card {

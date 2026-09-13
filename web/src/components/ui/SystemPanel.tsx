@@ -35,7 +35,7 @@ import { useCustomIntel } from '../../hooks/useCustomIntel';
 import { resolveIntelColor, resolveIntelLabel } from '../../utils/intelColors';
 import { WHTypeInfo } from './WHTypeInfo';
 import { Tooltip } from './Tooltip';
-import { PANEL_COLS_KEY, clampPanelCols } from '../../utils/panelCols';
+import { PANEL_COLS_KEY, clampPanelCols, fitPanelCols } from '../../utils/panelCols';
 import styles from './SystemPanel.module.css';
 
 /**
@@ -226,6 +226,17 @@ export function SystemPanel() {
 
   // Docked stack column count. Cross-device like the other panel prefs.
   const [panelColsSetting] = useUserSetting<number>(PANEL_COLS_KEY, 1);
+  // Width of the docked stack, for fitting the column count to what's
+  // available. A callback ref rather than useRef: the stack only mounts after
+  // the `!sys` early return below, so a mount-time effect would miss it.
+  const [stackEl, setStackEl] = useState<HTMLDivElement | null>(null);
+  const [stackWidth, setStackWidth] = useState(0);
+  useEffect(() => {
+    if (!stackEl) return;
+    const ro = new ResizeObserver(([entry]) => setStackWidth(entry.contentRect.width));
+    ro.observe(stackEl);
+    return () => ro.disconnect();
+  }, [stackEl]);
 
   const [height, setHeight] = useState(() => {
     const v = localStorage.getItem(HEIGHT_KEY);
@@ -450,12 +461,35 @@ export function SystemPanel() {
   const dockedIds = panelOrder.filter((id) => !floatingPanels[id]).filter(shareVisible);
   // Column mode is a ~460px strip beside the map — no room for more than one
   // column there, so the setting only applies to the below-the-map layout.
-  // `panelOrder` stays a flat list: index 0 is top-left, 1 sits to its right,
-  // and so on. dnd-kit's rect strategy sorts by measured boxes, so dragging a
-  // card across columns works without any change to the drag handler; the
-  // vertical strategy is kept for one column so that path is untouched.
-  const panelCols = sideBySide ? 1 : clampPanelCols(panelColsSetting);
-  const stackIsGrid = panelCols > 1;
+  // The stack is measured so a wide-screen setting degrades to however many
+  // readable columns actually fit, rather than to four unusable slivers.
+  const wantedCols = sideBySide ? 1 : clampPanelCols(panelColsSetting);
+  const panelCols = fitPanelCols(stackWidth, wantedCols);
+  const multiCol = panelCols > 1;
+  // Cards go into independent flex columns, round-robin by order index — 0 is
+  // top-left, 1 sits to its right, and so on — so `panelOrder` stays a flat
+  // list. Independent columns rather than a CSS grid: each column simply
+  // stacks its cards the way the one-column dock always has, so there are no
+  // shared row heights (a tall Signatures pane leaves no hole under a short
+  // Notes pane) and cards cannot collide. dnd-kit's rect strategy sorts by
+  // measured boxes, so dragging across columns works without any change to
+  // the drag handler; the vertical strategy is kept for one column so that
+  // path is untouched.
+  const stackColumns = Array.from({ length: panelCols }, (_, c) => dockedIds.filter((_, i) => i % panelCols === c));
+  const renderCard = (id: string) => (
+    <DraggableCard
+      key={id}
+      id={id}
+      title={panelTitle[id] ?? id}
+      onUndock={() => undock(id)}
+      // Signatures and anomalies split a single window-level paste between
+      // them, so both must stay mounted to receive it even when collapsed.
+      // See DraggableCard's keepMounted.
+      keepMounted={id === 'signatures' || id === 'anomalies'}
+    >
+      {cards[id]}
+    </DraggableCard>
+  );
   // Floating panes that are still valid ids and share-visible.
   const floatingIds = Object.keys(floatingPanels).filter((id) => cards[id] && shareVisible(id));
 
@@ -840,28 +874,16 @@ export function SystemPanel() {
         )}
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={dockedIds} strategy={stackIsGrid ? rectSortingStrategy : verticalListSortingStrategy}>
-            <div
-              className={`panel-stack${stackIsGrid ? ' panel-stack--grid' : ''}`}
-              style={stackIsGrid ? { '--panel-cols': panelCols } as React.CSSProperties : undefined}
-            >
-              {dockedIds.map((id) => (
-                <DraggableCard
-                  key={id}
-                  id={id}
-                  title={panelTitle[id] ?? id}
-                  onUndock={() => undock(id)}
-                  // Signatures and anomalies split a single window-level paste
-                  // between them, so both must stay mounted to receive it even
-                  // when collapsed. See DraggableCard's keepMounted.
-                  keepMounted={id === 'signatures' || id === 'anomalies'}
-                >
-                  {cards[id]}
-                </DraggableCard>
-              ))}
+          <SortableContext items={dockedIds} strategy={multiCol ? rectSortingStrategy : verticalListSortingStrategy}>
+            <div ref={setStackEl} className={`panel-stack${multiCol ? ' panel-stack--cols' : ''}`}>
+              {multiCol
+                ? stackColumns.map((ids, c) => (
+                    <div key={c} className="panel-stack__col">{ids.map(renderCard)}</div>
+                  ))
+                : dockedIds.map(renderCard)}
             </div>
           </SortableContext>
-  </DndContext>
+        </DndContext>
       </div>
     </aside>
 
