@@ -26,6 +26,8 @@ export interface FleetGraphSources {
   mapIds:      string[];
   /** Account whose personal bridges/services and exclusions apply (null = shared only). */
   ownerId:     number | null;
+  /** Scout connection ids the requester has flagged collapsed; never routed through. */
+  expiredScout?: Set<string>;
 }
 
 export interface FleetGraphSummary {
@@ -75,6 +77,8 @@ async function addScoutHoles(g: FleetGraph, src: FleetGraphSources, specs: Recor
     if (!isThera && !isTurnur) continue;
     if (isThera && !src.thera) continue;
     if (isTurnur && !src.turnur) continue;
+    // Flagged collapsed by this requester's scope — the hole isn't there.
+    if (src.expiredScout?.has(c.id)) continue;
     const m = massFor(specs, c.whType, c.maxShipSize);
     addSpecial(g, c.outSystemId, c.inSystemId, {
       method: 'wormhole', weight: 1, scout: true,

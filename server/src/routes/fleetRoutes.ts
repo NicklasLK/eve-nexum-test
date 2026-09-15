@@ -7,6 +7,7 @@ import { esiFetch } from '../utils/esi.js';
 import { getValidToken } from '../utils/eveToken.js';
 import { resolveOwnerId } from '../utils/owner.js';
 import { visibleMapIds } from './maps.js';
+import { expiredScoutIds } from './scout.js';
 import { buildFleetGraph, getHubIds, resolveSystem } from '../services/fleetRouteGraph.js';
 import {
   calculateRoutes, defaultFleetOptions, extractWaypoints, routeToJson,
@@ -66,6 +67,10 @@ router.post('/', async (req, res) => {
     const ownerId = await resolveOwnerId(req);
     const needMaps = options.useWormholes || options.useJumpBridges;
     const mapIds = needMaps ? await visibleMapIds(req) : [];
+    // Holes this requester's scope has flagged collapsed. Only worth the
+    // lookup when a scout hub is actually in play.
+    const useScout = options.useWormholes && (options.includeThera || options.includeTurnur);
+    const expiredScout = useScout ? await expiredScoutIds(req) : undefined;
     const started = Date.now();
     const { graph, summary } = await buildFleetGraph({
       thera: options.useWormholes && options.includeThera,
@@ -73,7 +78,7 @@ router.post('/', async (req, res) => {
       wormholes: options.useWormholes,
       jumpBridges: options.useJumpBridges,
       titan: options.useTitanBridge, blops: options.useBlopsBridge, conduit: options.useCarrierConduit,
-      mapIds, ownerId,
+      mapIds, ownerId, expiredScout,
     });
     const routes = calculateRoutes(graph, from.id, to.id, options, maxRoutes).map((r) => routeToJson(r, graph));
     log.info(`${from.name} → ${to.name}: ${routes.length} route(s) in ${Date.now() - started} ms`);
