@@ -59,7 +59,9 @@
     "loading": "加载中…",
     "add": "添加星系",
     "onMap": "已在地图上",
-    "unknownOption": "未知（未探明的虫洞）"
+    "unknownOption": "未知（未探明的虫洞）",
+    "addHere": "添加 {{system}}",
+    "hereOnMap": "{{system}} 已在此地图上"
   },
   "admin": {
     "back": "返回地图",
@@ -698,6 +700,8 @@
     "spreadNodes": "散开节点",
     "removeOrphans": "移除孤立星系 ({{count}})",
     "removeOrphansConfirm": "移除 {{count}} 个孤立星系？它们没有有效连接（没有连接，或只有断开的连接）。母星系和锁定星系将保留。此操作可撤销。",
+    "removeStranded": "移除与母星系失联的星系 ({{count}})",
+    "removeStrandedConfirm": "移除 {{count}} 个无法返回 {{home}} 的星系？母星系和已锁定的星系会保留。这是批量删除——撤销会逐个恢复，且仅保留最近 50 次删除。",
     "labels": "标签",
     "customLabel": "自定义标签",
     "clearLabels": "清除",
@@ -1693,7 +1697,9 @@
     "inSig": "入口签名",
     "outSig": "出口签名",
     "inSigHint": "{{system}} 中的信号 ID —— 虫洞的另一端",
-    "outSigHint": "{{system}} 中的信号 ID —— 从这里跃迁前往的一端"
+    "outSigHint": "{{system}} 中的信号 ID —— 从这里跃迁前往的一端",
+    "markExpired": "报告该洞已坍塌",
+    "unmarkExpired": "其实没有坍塌"
   },
   "session": {
     "idleLogout": "因长时间未操作已退出登录。",

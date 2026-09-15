@@ -59,7 +59,9 @@
     "loading": "Cargando…",
     "add": "Añadir sistema",
     "onMap": "en el mapa",
-    "unknownOption": "Desconocido (wormhole sin mapear)"
+    "unknownOption": "Desconocido (wormhole sin mapear)",
+    "addHere": "Añadir {{system}}",
+    "hereOnMap": "{{system}} ya está en este mapa"
   },
   "admin": {
     "back": "Volver a los mapas",
@@ -698,6 +700,8 @@
     "spreadNodes": "Distribuir nodos",
     "removeOrphans": "Eliminar sistemas huérfanos ({{count}})",
     "removeOrphansConfirm": "¿Eliminar {{count}} sistema(s) huérfano(s)? No tienen ninguna conexión válida (ninguna, o solo rotas). Los sistemas de origen y bloqueados se conservan. Esto se puede deshacer.",
+    "removeStranded": "Eliminar sistemas sin conexión al hogar ({{count}})",
+    "removeStrandedConfirm": "¿Eliminar {{count}} sistema(s) sin ruta de vuelta a {{home}}? Se conservan el sistema hogar y los bloqueados. Es un borrado masivo: deshacer los restaura de uno en uno y solo se guardan las últimas 50 eliminaciones.",
     "labels": "Etiquetas",
     "customLabel": "Etiqueta personalizada",
     "clearLabels": "Borrar",
@@ -1693,7 +1697,9 @@
     "inSig": "inSig",
     "outSig": "outSig",
     "inSigHint": "ID de firma en {{system}}: el extremo lejano del agujero",
-    "outSigHint": "ID de firma en {{system}}: el extremo al que warpeas desde aquí"
+    "outSigHint": "ID de firma en {{system}}: el extremo al que warpeas desde aquí",
+    "markExpired": "Informar de que este agujero ha colapsado",
+    "unmarkExpired": "No ha colapsado"
   },
   "session": {
     "idleLogout": "Sesión cerrada por inactividad.",

@@ -59,7 +59,9 @@
     "loading": "불러오는 중…",
     "add": "성계 추가",
     "onMap": "지도에 있음",
-    "unknownOption": "알 수 없음 (미탐사 웜홀)"
+    "unknownOption": "알 수 없음 (미탐사 웜홀)",
+    "addHere": "{{system}} 추가",
+    "hereOnMap": "{{system}}은(는) 이미 이 맵에 있습니다"
   },
   "admin": {
     "back": "지도로 돌아가기",
@@ -698,6 +700,8 @@
     "spreadNodes": "노드 펼치기",
     "removeOrphans": "고립 성계 제거 ({{count}})",
     "removeOrphansConfirm": "{{count}}개의 고립 성계를 제거하시겠습니까? 이들은 유효한 연결이 없습니다(없거나 끊긴 것만). 홈과 잠긴 성계는 유지됩니다. 실행 취소할 수 있습니다.",
+    "removeStranded": "홈과 끊긴 시스템 제거 ({{count}})",
+    "removeStrandedConfirm": "{{home}}(으)로 돌아가는 경로가 없는 시스템 {{count}}개를 제거할까요? 홈과 잠긴 시스템은 유지됩니다. 일괄 삭제이므로 실행 취소는 하나씩 복원하며, 최근 50개의 삭제만 보관됩니다.",
     "labels": "라벨",
     "customLabel": "사용자 라벨",
     "clearLabels": "지우기",
@@ -1693,7 +1697,9 @@
     "inSig": "입구 시그",
     "outSig": "출구 시그",
     "inSigHint": "{{system}}의 시그니처 ID — 웜홀의 반대쪽 끝입니다",
-    "outSigHint": "{{system}}의 시그니처 ID — 여기서 워프해 갈 쪽입니다"
+    "outSigHint": "{{system}}의 시그니처 ID — 여기서 워프해 갈 쪽입니다",
+    "markExpired": "이 홀이 붕괴했다고 보고",
+    "unmarkExpired": "붕괴하지 않았음"
   },
   "session": {
     "idleLogout": "비활성으로 인해 로그아웃되었습니다.",

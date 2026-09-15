@@ -59,7 +59,9 @@
     "loading": "Lädt…",
     "add": "System hinzufügen",
     "onMap": "auf Karte",
-    "unknownOption": "Unbekannt (unerforschtes Wurmloch)"
+    "unknownOption": "Unbekannt (unerforschtes Wurmloch)",
+    "addHere": "{{system}} hinzufügen",
+    "hereOnMap": "{{system}} ist bereits auf dieser Karte"
   },
   "admin": {
     "back": "Zurück zu den Karten",
@@ -698,6 +700,8 @@
     "spreadNodes": "Knoten verteilen",
     "removeOrphans": "Verwaiste Systeme entfernen ({{count}})",
     "removeOrphansConfirm": "{{count}} verwaiste(s) System(e) entfernen? Diese haben keine gültige Verbindung (keine oder nur unterbrochene). Heimat- und gesperrte Systeme bleiben erhalten. Dies kann rückgängig gemacht werden.",
+    "removeStranded": "Von Heimat getrennte Systeme entfernen ({{count}})",
+    "removeStrandedConfirm": "{{count}} System(e) ohne Weg zurück nach {{home}} entfernen? Heimat- und gesperrte Systeme bleiben erhalten. Dies ist eine Massenlöschung — das Rückgängigmachen stellt sie einzeln wieder her, und nur die letzten 50 Löschungen werden vorgehalten.",
     "labels": "Labels",
     "customLabel": "Eigenes Label",
     "clearLabels": "Löschen",
@@ -1693,7 +1697,9 @@
     "inSig": "inSig",
     "outSig": "outSig",
     "inSigHint": "Signatur-ID in {{system}} — das andere Ende des Lochs",
-    "outSigHint": "Signatur-ID in {{system}} — das Ende, das du von hier aus anwarpst"
+    "outSigHint": "Signatur-ID in {{system}} — das Ende, das du von hier aus anwarpst",
+    "markExpired": "Dieses Loch als kollabiert melden",
+    "unmarkExpired": "Doch nicht kollabiert"
   },
   "session": {
     "idleLogout": "Wegen Inaktivität abgemeldet.",

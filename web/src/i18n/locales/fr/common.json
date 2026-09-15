@@ -59,7 +59,9 @@
     "loading": "Chargement…",
     "add": "Ajouter le système",
     "onMap": "sur la carte",
-    "unknownOption": "Inconnu (wormhole non cartographié)"
+    "unknownOption": "Inconnu (wormhole non cartographié)",
+    "addHere": "Ajouter {{system}}",
+    "hereOnMap": "{{system}} est déjà sur cette carte"
   },
   "admin": {
     "back": "Retour aux cartes",
@@ -698,6 +700,8 @@
     "spreadNodes": "Espacer les nœuds",
     "removeOrphans": "Supprimer les systèmes orphelins ({{count}})",
     "removeOrphansConfirm": "Supprimer {{count}} système(s) orphelin(s) ? Ils n'ont aucune connexion valide (aucune, ou uniquement rompues). Les systèmes d'origine et verrouillés sont conservés. Cette action est réversible.",
+    "removeStranded": "Supprimer les systèmes coupés du foyer ({{count}})",
+    "removeStrandedConfirm": "Supprimer {{count}} système(s) sans itinéraire de retour vers {{home}} ? Le système foyer et les systèmes verrouillés sont conservés. Il s’agit d’une suppression en masse : l’annulation les restaure un par un, et seules les 50 dernières suppressions sont conservées.",
     "labels": "Labels",
     "customLabel": "Label personnalisé",
     "clearLabels": "Effacer",
@@ -1693,7 +1697,9 @@
     "inSig": "inSig",
     "outSig": "outSig",
     "inSigHint": "Identifiant de signature dans {{system}} — l'autre extrémité du trou",
-    "outSigHint": "Identifiant de signature dans {{system}} — l'extrémité vers laquelle tu warpes d'ici"
+    "outSigHint": "Identifiant de signature dans {{system}} — l'extrémité vers laquelle tu warpes d'ici",
+    "markExpired": "Signaler ce trou comme effondré",
+    "unmarkExpired": "Finalement pas effondré"
   },
   "session": {
     "idleLogout": "Déconnecté pour inactivité.",

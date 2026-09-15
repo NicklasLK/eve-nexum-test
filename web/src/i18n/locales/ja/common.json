@@ -59,7 +59,9 @@
     "loading": "読み込み中…",
     "add": "星系を追加",
     "onMap": "マップ上",
-    "unknownOption": "不明（未マッピングのワームホール）"
+    "unknownOption": "不明（未マッピングのワームホール）",
+    "addHere": "{{system}}を追加",
+    "hereOnMap": "{{system}}はすでにこのマップにあります"
   },
   "admin": {
     "back": "マップに戻る",
@@ -698,6 +700,8 @@
     "spreadNodes": "ノードを広げる",
     "removeOrphans": "孤立システムを削除 ({{count}})",
     "removeOrphansConfirm": "{{count}} 個の孤立システムを削除しますか？これらには有効な接続がありません（接続なし、または切断のみ）。ホームとロックされたシステムは保持されます。元に戻せます。",
+    "removeStranded": "ホームから切り離されたシステムを削除 ({{count}})",
+    "removeStrandedConfirm": "{{home}}へ戻る経路のないシステムを{{count}}件削除しますか？ホームとロック済みのシステムは残ります。一括削除のため、元に戻す操作は1件ずつ復元し、直近50件の削除のみ保持されます。",
     "labels": "ラベル",
     "customLabel": "カスタムラベル",
     "clearLabels": "クリア",
@@ -1693,7 +1697,9 @@
     "inSig": "入口シグ",
     "outSig": "出口シグ",
     "inSigHint": "{{system}} 側のシグネチャ ID — ワームホールの反対側です",
-    "outSigHint": "{{system}} 側のシグネチャ ID — ここからワープする側です"
+    "outSigHint": "{{system}} 側のシグネチャ ID — ここからワープする側です",
+    "markExpired": "このホールの消滅を報告",
+    "unmarkExpired": "消滅していなかった"
   },
   "session": {
     "idleLogout": "非アクティブのためサインアウトしました。",
