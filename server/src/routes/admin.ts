@@ -1229,7 +1229,7 @@ const SYSTEMS_CHART_SPEC: Record<string, { trunc: string; step: string; count: n
 function monthBounds(raw: unknown): { key: string; from: Date; to: Date } {
   const now = new Date();
   let y = now.getUTCFullYear(), m = now.getUTCMonth() - 1;
-  if (typeof raw === 'string' && /^d{4}-(0[1-9]|1[0-2])$/.test(raw)) { y = Number(raw.slice(0, 4)); m = Number(raw.slice(5)) - 1; }
+  if (typeof raw === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(raw)) { y = Number(raw.slice(0, 4)); m = Number(raw.slice(5)) - 1; }
   const from = new Date(Date.UTC(y, m, 1));
   const to   = new Date(Date.UTC(y, m + 1, 1));
   return { key: `${from.getUTCFullYear()}-${String(from.getUTCMonth() + 1).padStart(2, '0')}`, from, to };

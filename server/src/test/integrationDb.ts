@@ -81,7 +81,7 @@ const TABLES = [
   'solar_systems', 'map_regions', 'map_stargates',
   'access_grants', 'app_settings', 'map_shares', 'maps',
   'corp_standings', 'alliance_standings', 'character_standings',
-  'standings_refresh', 'entity_names', 'sessions', 'user_events', 'users',
+  'standings_refresh', 'entity_names', 'sessions', 'user_events', 'users', 'wh_credits', 'wh_credit_excluded_regions',
   // ISK-for-maps. `owners` last: users.owner_id and maps.owner_id reference it,
   // and TRUNCATE ... CASCADE needs it in the same statement to clear cleanly.
   'isk_donations', 'wallet_reader', 'owners',
