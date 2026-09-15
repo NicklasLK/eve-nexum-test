@@ -9,6 +9,7 @@ import { getScoutConnections } from '../routes/scout.js';
 import { getJumpSystems } from './jumpGraph.js';
 import { getWormholeSpecs } from '../routes/wormholes.js';
 import { effectiveExpiryMs } from '../data/whLifetimes.js';
+import { bridgeUsableSql } from './bridgeState.js';
 import {
   CAPITAL_RANGE_LY, LY_METRES, SIZE_MASS, addSpecial, isWspaceId,
   type FleetEdge, type FleetGraph, type FleetMethod, type MassStatus,
@@ -138,7 +139,7 @@ async function addJumpBridges(g: FleetGraph, mapIds: string[], ownerId: number |
   const { rows } = await db.query<{ id: number; a: number; b: number; name: string }>(
     `SELECT id, from_system_id AS a, to_system_id AS b, name
        FROM jump_bridges
-      WHERE active AND missed_syncs < 2
+      WHERE ${bridgeUsableSql()}
         AND ((owner_id IS NULL AND NOT EXISTS (
                 SELECT 1 FROM bridge_exclusions e
                  WHERE e.owner_id = $1 AND e.kind = 'bridge' AND e.target_id = jump_bridges.id))

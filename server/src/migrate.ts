@@ -1107,6 +1107,26 @@ export async function migrate() {
       ON jump_bridges (LEAST(from_system_id, to_system_id), GREATEST(from_system_id, to_system_id), COALESCE(owner_id, 0));
     CREATE INDEX IF NOT EXISTS idx_jump_bridges_owner ON jump_bridges (owner_id);
 
+    -- Live state copied from the corp structures listing by the structure
+    -- reader (ESI-sourced rows only; manual rows stay NULL = unknown = usable).
+    -- esi_state is ESI's structure state (armor_reinforce, hull_reinforce,
+    -- shield_vulnerable, …), service_online whether the jump-gate service
+    -- module is online — an unfuelled or unfit gate is still listed but cannot
+    -- be jumped. Reduced to one verdict in services/bridgeState.ts.
+    ALTER TABLE jump_bridges ADD COLUMN IF NOT EXISTS esi_state       TEXT;
+    ALTER TABLE jump_bridges ADD COLUMN IF NOT EXISTS state_timer_end TIMESTAMPTZ;
+    ALTER TABLE jump_bridges ADD COLUMN IF NOT EXISTS fuel_expires_at TIMESTAMPTZ;
+    ALTER TABLE jump_bridges ADD COLUMN IF NOT EXISTS service_online  BOOLEAN;
+
+    -- Set on a 'jumpgate' map connection the alliance-map projection drew (or
+    -- adopted) for a shared bridge; NULL on hand-drawn links. The projection
+    -- only ever edits or removes tagged links (services/bridgeMapSync.ts). No
+    -- FK on purpose: a deleted bridge leaves a dangling tag that the next
+    -- projection run removes, and the projection is the one place that decides.
+    ALTER TABLE map_connections ADD COLUMN IF NOT EXISTS jump_bridge_id INTEGER;
+    CREATE INDEX IF NOT EXISTS idx_map_connections_bridge
+      ON map_connections (jump_bridge_id) WHERE jump_bridge_id IS NOT NULL;
+
     -- Standby capital bridge pilots: a titan / black ops / conduit ship parked
     -- in system_id that can bridge a fleet to any low/null system within range.
     -- Shared (owner_id NULL, full/admin managed) or personal, like bridges.

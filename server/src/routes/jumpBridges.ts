@@ -12,6 +12,7 @@ import { createLogger } from '../utils/logger.js';
 import { parseBridgeLine } from '../services/jumpBridgeNames.js';
 import { resolveSystem, resolveSystemNames } from '../services/fleetRouteGraph.js';
 import { syncStructureReaders } from '../services/structureReaderSync.js';
+import { bridgeUsability, type BridgeUsability } from '../services/bridgeState.js';
 
 const log = createLogger('jumpBridges');
 export const jumpBridgesRouter = Router();
@@ -28,6 +29,7 @@ interface BridgeRow {
   id: number; fromSystemId: number; fromName: string | null; toSystemId: number; toName: string | null;
   name: string; ownerCorpId: number | null; source: string; active: boolean; missedSyncs: number;
   lastSeenAt: string | null; addedBy: string | null; personal: boolean; createdAt: string;
+  esiState: string | null; stateTimerEnd: string | null; fuelExpiresAt: string | null; serviceOnline: boolean | null;
 }
 
 const SELECT_BRIDGES = `
@@ -35,6 +37,7 @@ const SELECT_BRIDGES = `
          b.to_system_id AS "toSystemId", st.name AS "toName",
          b.name, b.owner_corp_id AS "ownerCorpId", b.source, b.active, b.missed_syncs AS "missedSyncs",
          b.last_seen_at AS "lastSeenAt", u.character_name AS "addedBy",
+         b.esi_state AS "esiState", b.state_timer_end AS "stateTimerEnd", b.fuel_expires_at AS "fuelExpiresAt", b.service_online AS "serviceOnline",
          (b.owner_id IS NOT NULL) AS personal, b.created_at AS "createdAt"
     FROM jump_bridges b
     LEFT JOIN solar_systems sf ON sf.id = b.from_system_id
@@ -58,7 +61,9 @@ jumpBridgesRouter.get('/', async (req, res) => {
         `SELECT DISTINCT corp_id AS "corpId", corp_name AS "corpName" FROM structure_readers WHERE corp_id = ANY($1::int[])`, [corpIds]);
       cn.forEach((c) => corpNames.set(c.corpId, c.corpName));
     }
-    const withCorp = rows.map((r) => ({ ...r, ownerCorpName: r.ownerCorpId != null ? corpNames.get(r.ownerCorpId) ?? null : null }));
+    const withCorp = rows.map((r): BridgeRow & { ownerCorpName: string | null; usability: BridgeUsability } => ({
+      ...r, ownerCorpName: r.ownerCorpId != null ? corpNames.get(r.ownerCorpId) ?? null : null, usability: bridgeUsability(r),
+    }));
     return res.json({
       shared: withCorp.filter((r) => !r.personal),
       personal: withCorp.filter((r) => r.personal),

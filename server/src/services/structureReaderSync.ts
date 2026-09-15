@@ -11,6 +11,7 @@
 // authoritative source.
 import { db } from '../db.js';
 import { esiFetch } from '../utils/esi.js';
+import { bridgeStateFromEsi, type EsiStructureState } from './bridgeState.js';
 import { decryptToken, encryptToken } from '../utils/tokenCrypto.js';
 import { createLogger } from '../utils/logger.js';
 import { ANSIBLEX_TYPE_ID, parseAnsiblexName } from './jumpBridgeNames.js';
@@ -45,7 +46,7 @@ async function readerAccessToken(row: ReaderRow): Promise<string> {
   return t.access_token;
 }
 
-interface CorpStructure { structure_id: number; type_id: number; system_id?: number; name?: string }
+interface CorpStructure extends EsiStructureState { structure_id: number; type_id: number; system_id?: number; name?: string }
 
 export interface ReaderSyncResult {
   characterId: number; characterName: string; ok: boolean; gates: number; error?: string;
@@ -107,9 +108,11 @@ async function syncReader(row: ReaderRow, runStartedAt: Date): Promise<ReaderSyn
     if (!p.ends) { log.warn(`reader ${row.character_name}: unparseable Ansiblex name "${p.name}"`); continue; }
     const a = names.get(p.ends.a.toLowerCase()), b = names.get(p.ends.b.toLowerCase());
     if (!a || !b || a.id === b.id) { log.warn(`reader ${row.character_name}: unknown system in "${p.name}"`); continue; }
+    const st = bridgeStateFromEsi(p);
     await db.query(
-      `INSERT INTO jump_bridges (from_system_id, to_system_id, owner_id, name, owner_corp_id, structure_id, source, last_seen_at, missed_syncs, updated_at)
-       VALUES ($1, $2, NULL, $3, $4, $5, 'esi', $6, 0, NOW())
+      `INSERT INTO jump_bridges (from_system_id, to_system_id, owner_id, name, owner_corp_id, structure_id, source, last_seen_at, missed_syncs, updated_at,
+                                 esi_state, state_timer_end, fuel_expires_at, service_online)
+       VALUES ($1, $2, NULL, $3, $4, $5, 'esi', $6, 0, NOW(), $7, $8, $9, $10)
        ON CONFLICT (LEAST(from_system_id, to_system_id), GREATEST(from_system_id, to_system_id), COALESCE(owner_id, 0)) DO UPDATE
          SET name = CASE WHEN jump_bridges.source = 'esi' OR jump_bridges.name = '' THEN EXCLUDED.name ELSE jump_bridges.name END,
              owner_corp_id = EXCLUDED.owner_corp_id,
@@ -117,8 +120,13 @@ async function syncReader(row: ReaderRow, runStartedAt: Date): Promise<ReaderSyn
              source        = 'esi',
              last_seen_at  = EXCLUDED.last_seen_at,
              missed_syncs  = 0,
+             esi_state       = EXCLUDED.esi_state,
+             state_timer_end = EXCLUDED.state_timer_end,
+             fuel_expires_at = EXCLUDED.fuel_expires_at,
+             service_online  = EXCLUDED.service_online,
              updated_at    = NOW()`,
-      [a.id, b.id, p.ends.label || p.name || '', corpId, p.structure_id, runStartedAt],
+      [a.id, b.id, p.ends.label || p.name || '', corpId, p.structure_id, runStartedAt,
+       st.esiState, st.stateTimerEnd, st.fuelExpiresAt, st.serviceOnline],
     );
     upserted++;
   }
