@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../../api/client';
 import { toast } from '../../utils/toastStore';
 import { charPortrait } from '../../utils/eveImages';
-import { timeAgo, DASH } from '../../i18n/format';
+import { timeAgo, expiresIn, europeanDate, DASH } from '../../i18n/format';
 import { XIcon } from '../../icons';
 import { ConfirmModal } from './ConfirmModal';
 import { Select } from './Select';
@@ -18,8 +18,9 @@ import styles from './AdminPage.module.css';
 // standby titan / black ops / conduit pilots.
 
 interface Reader { characterId: number; characterName: string; corpId: number | null; corpName: string; role: string; gatesFound: number; lastSyncAt: string | null; lastError: string | null; addedBy: string | null }
-interface Bridge { id: number; fromSystemId: number; fromName: string | null; toSystemId: number; toName: string | null; name: string; ownerCorpId: number | null; ownerCorpName: string | null; source: 'esi' | 'manual'; active: boolean; missedSyncs: number; lastSeenAt: string | null; addedBy: string | null; personal: boolean }
-interface BridgesResp { shared: Bridge[]; personal: Bridge[]; canManageShared: boolean }
+type BridgeUsability = 'online' | 'reinforced' | 'offline' | 'missing' | 'inactive';
+interface Bridge { id: number; fromSystemId: number; fromName: string | null; toSystemId: number; toName: string | null; name: string; ownerCorpId: number | null; ownerCorpName: string | null; source: 'esi' | 'manual'; active: boolean; missedSyncs: number; lastSeenAt: string | null; addedBy: string | null; personal: boolean; esiState: string | null; stateTimerEnd: string | null; fuelExpiresAt: string | null; serviceOnline: boolean | null; usability: BridgeUsability }
+interface BridgesResp { shared: Bridge[]; personal: Bridge[]; canManageShared: boolean; drawnLinks: number }
 interface BulkResult { added: number; skipped: number; errors: { line: number; text: string; reason: string }[] }
 
 const ROLE_LABEL: Record<string, string> = { Director: 'Director', Station_Manager: 'Station Manager' };
@@ -28,6 +29,7 @@ export function JumpBridgesTab() {
   const { t } = useTranslation();
   const [readers, setReaders] = useState<Reader[] | null>(null);
   const [bridges, setBridges] = useState<Bridge[] | null>(null);
+  const [drawn, setDrawn] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
   const [syncing, setSyncing] = useState(false);
@@ -37,7 +39,7 @@ export function JumpBridgesTab() {
   const load = useCallback(async () => {
     try {
       const [r, b] = await Promise.all([api<{ readers: Reader[] }>('/api/jump-bridges/readers'), api<BridgesResp>('/api/jump-bridges')]);
-      setReaders(r.readers); setBridges(b.shared); setError(null);
+      setReaders(r.readers); setBridges(b.shared); setDrawn(b.drawnLinks); setError(null);
     } catch { setError(t('fleetRoutes.admin.loadFailed')); }
   }, [t]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -82,7 +84,7 @@ export function JumpBridgesTab() {
 
   const q = filter.trim().toLowerCase();
   const shown = (bridges ?? []).filter((b) => !q || [b.fromName, b.toName, b.name, b.ownerCorpName].some((s) => s?.toLowerCase().includes(q)));
-  const usable = (b: Bridge) => b.active && b.missedSyncs < 2;
+  const usable = (b: Bridge) => b.usability === 'online';
   const nActive = (bridges ?? []).filter(usable).length, nInactive = (bridges ?? []).length - nActive;
 
   return (
@@ -132,7 +134,7 @@ export function JumpBridgesTab() {
 
       <div className={styles.pgSectionBar}>
         <h3 style={{ margin: 0, fontSize: 13 }}>
-          {t('fleetRoutes.admin.bridges')} <span style={{ color: 'var(--text-subtle)', fontWeight: 400 }}>· {t('fleetRoutes.admin.nActive', { count: nActive })} · {t('fleetRoutes.admin.nInactive', { count: nInactive })}</span>
+          {t('fleetRoutes.admin.bridges')} <span style={{ color: 'var(--text-subtle)', fontWeight: 400 }}>· {t('fleetRoutes.admin.nActive', { count: nActive })} · {t('fleetRoutes.admin.nInactive', { count: nInactive })} · <span title={t('fleetRoutes.admin.onMapsHint')}>{t('fleetRoutes.admin.onMaps', { count: drawn })}</span></span>
         </h3>
         <div className={styles.mActions}>
           <input className="chains-new__name" style={{ width: 220 }} placeholder={t('fleetRoutes.admin.filter')} value={filter} onChange={(e) => setFilter(e.target.value)} />
@@ -145,7 +147,7 @@ export function JumpBridgesTab() {
         <table className={styles.mTable}>
           <thead><tr>
             <th>{t('fleetRoutes.admin.colGate')}</th><th>{t('fleetRoutes.admin.colRoute')}</th><th>{t('fleetRoutes.admin.colOwner')}</th>
-            <th>{t('fleetRoutes.admin.colSource')}</th><th>{t('fleetRoutes.admin.colLastSeen')}</th><th>{t('fleetRoutes.admin.colActive')}</th><th />
+            <th>{t('fleetRoutes.admin.colSource')}</th><th>{t('fleetRoutes.admin.colLastSeen')}</th><th>{t('fleetRoutes.admin.colState')}</th><th>{t('fleetRoutes.admin.colActive')}</th><th />
           </tr></thead>
           <tbody>
             {shown.map((b) => (
@@ -158,8 +160,8 @@ export function JumpBridgesTab() {
                   {b.source === 'esi'
                     ? (b.lastSeenAt ? timeAgo(t, new Date(b.lastSeenAt)) : DASH)
                     : t('fleetRoutes.admin.addedBy', { name: b.addedBy ?? DASH })}
-                  {b.missedSyncs >= 2 && <div style={{ fontSize: 11, color: '#f0a030' }}>{t('fleetRoutes.admin.missingFromEsi')}</div>}
                 </td>
+                <td><BridgeStatePill b={b} /></td>
                 <td><input type="checkbox" checked={b.active} onChange={(e) => setActive(b, e.target.checked)} aria-label={t('fleetRoutes.admin.colActive')} /></td>
                 <td className={styles.mActions}>
                   {b.source === 'manual'
@@ -181,6 +183,30 @@ export function JumpBridgesTab() {
       )}
     </>
   );
+}
+
+/** Milliseconds until `end`, or null when it has passed (or there is none). */
+function msUntil(end: Date | null): number | null {
+  if (!end) return null;
+  const left = end.getTime() - Date.now();
+  return left > 0 ? left : null;
+}
+
+// One pill per bridge: green when jumpable, amber with the reason otherwise.
+// A reinforce timer shows how long is left; the tooltip carries the absolute
+// time and what the state means.
+function BridgeStatePill({ b }: { b: Bridge }) {
+  const { t } = useTranslation();
+  const k = b.usability;
+  if (k === 'online')   return <span className={`${styles.mPill} ${styles.mPillOk}`}>{t('fleetRoutes.admin.state.online')}</span>;
+  if (k === 'inactive') return <span className={styles.mPill}>{t('fleetRoutes.admin.state.inactive')}</span>;
+  const end = b.stateTimerEnd ? new Date(b.stateTimerEnd) : null;
+  const timerLeft = msUntil(end);
+  const label = k === 'reinforced' && timerLeft != null
+    ? t('fleetRoutes.admin.state.reinforcedUntil', { in: expiresIn(t, timerLeft) })
+    : t(`fleetRoutes.admin.state.${k}`);
+  const hint = t(`fleetRoutes.admin.state.${k}Hint`) + (end ? ` (${europeanDate(end)})` : '');
+  return <span className={styles.mPill} style={{ color: '#f0a030', borderColor: '#f0a030' }} title={hint}>{label}</span>;
 }
 
 function PasteModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {

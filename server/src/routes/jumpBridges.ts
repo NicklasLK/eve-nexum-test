@@ -65,12 +65,18 @@ jumpBridgesRouter.get('/', async (req, res) => {
     const withCorp = rows.map((r): BridgeRow & { ownerCorpName: string | null; usability: BridgeUsability } => ({
       ...r, ownerCorpName: r.ownerCorpId != null ? corpNames.get(r.ownerCorpId) ?? null : null, usability: bridgeUsability(r),
     }));
+    // How many of the shared bridges are currently drawn on the alliance maps.
+    const { rows: drawn } = await db.query<{ n: string }>(
+      `SELECT COUNT(*) AS n FROM map_connections c JOIN maps m ON m.id = c.map_id
+        WHERE c.jump_bridge_id IS NOT NULL AND m.alliance_id IS NOT NULL`,
+    );
     return res.json({
       shared: withCorp.filter((r) => !r.personal),
       personal: withCorp.filter((r) => r.personal),
       excludedBridges: ex.filter((e) => e.kind === 'bridge').map((e) => e.targetId),
       excludedServices: ex.filter((e) => e.kind === 'service').map((e) => e.targetId),
       canManageShared: canManageShared(req.session.role),
+      drawnLinks: Number(drawn[0]?.n ?? 0),
     });
   } catch (err) { log.error('list failed:', err); return res.status(500).json({ error: 'Database query failed' }); }
 });
