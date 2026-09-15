@@ -15,6 +15,7 @@ export interface CreditConn {
   createdByUserId: number | null; whType: string | null; whTypeSetByUserId: number | null;
   sourceSystemId: string; targetSystemId: string;
   sourceEveId: number | null; targetEveId: number | null;
+  sourceRegionId: number | null; targetRegionId: number | null;
   sourceSignatureId: string | null; targetSignatureId: string | null;
 }
 
@@ -43,8 +44,13 @@ export function originSig(conn: CreditConn, sigs: CreditSig[]): CreditSig | null
 }
 
 /** null = not (yet) creditable. Pure; see whCredit.test.ts. */
-export function evaluate(conn: CreditConn, sigs: CreditSig[], knownCodes: Set<string>): Credit | null {
+export function evaluate(
+  conn: CreditConn, sigs: CreditSig[], knownCodes: Set<string>, excludedRegions: Set<number> = new Set(),
+): Credit | null {
   if (conn.connectionType !== 'standard') return null;          // gates, bridges, cynos never count
+  // Either end in an excluded region (Admin › Wormhole credits): never credited.
+  if ((conn.sourceRegionId != null && excludedRegions.has(conn.sourceRegionId))
+   || (conn.targetRegionId != null && excludedRegions.has(conn.targetRegionId))) return null;
   if (conn.createdVia !== 'jump' || conn.createdByUserId == null) return null;
   const c = code(conn.whType);
   if (!c || c === 'K162' || !knownCodes.has(c)) return null;    // K162 only says "far side"
@@ -59,10 +65,13 @@ async function loadConn(mapId: string, connectionId: string): Promise<CreditConn
             c.created_by_user_id AS "createdByUserId", c.wh_type AS "whType", c.wh_type_set_by_user_id AS "whTypeSetByUserId",
             c.source_id AS "sourceSystemId", c.target_id AS "targetSystemId",
             s.eve_system_id AS "sourceEveId", t.eve_system_id AS "targetEveId",
+            ss.region_id AS "sourceRegionId", ts.region_id AS "targetRegionId",
             c.source_signature_id AS "sourceSignatureId", c.target_signature_id AS "targetSignatureId"
        FROM map_connections c
        JOIN map_systems s ON s.id = c.source_id
        JOIN map_systems t ON t.id = c.target_id
+       LEFT JOIN solar_systems ss ON ss.id = s.eve_system_id
+       LEFT JOIN solar_systems ts ON ts.id = t.eve_system_id
       WHERE c.id = $1 AND c.map_id = $2`,
     [connectionId, mapId],
   );
@@ -77,6 +86,11 @@ async function loadWormholeSigs(systemIds: string[]): Promise<CreditSig[]> {
     [systemIds],
   );
   return rows;
+}
+
+async function loadExcludedRegions(): Promise<Set<number>> {
+  const { rows } = await db.query<{ id: number }>(`SELECT region_id AS id FROM wh_credit_excluded_regions`);
+  return new Set(rows.map((r) => r.id));
 }
 
 let knownCodes: Set<string> | null = null;
@@ -95,7 +109,7 @@ export async function creditConnection(mapId: string, connectionId: string): Pro
   const conn = await loadConn(mapId, connectionId);
   if (!conn || conn.createdVia !== 'jump' || conn.connectionType !== 'standard' || !code(conn.whType)) return false;
   const sigs = await loadWormholeSigs([conn.sourceSystemId, conn.targetSystemId]);
-  const credit = evaluate(conn, sigs, await loadKnownCodes());
+  const credit = evaluate(conn, sigs, await loadKnownCodes(), await loadExcludedRegions());
   if (!credit) return false;
   const { rowCount } = await db.query(
     `INSERT INTO wh_credits (connection_id, map_id, jumper_user_id, typer_user_id, wh_type, from_eve_system_id, to_eve_system_id)

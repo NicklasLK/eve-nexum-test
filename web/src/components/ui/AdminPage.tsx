@@ -24,7 +24,7 @@ import { CaretUpIcon, CaretDownIcon, XIcon, ArrowSquareOutIcon } from '../../ico
 import { createPortal } from 'react-dom';
 import styles from './AdminPage.module.css';
 import { JumpBridgesTab, BridgeServicesTab } from './FleetRoutesAdmin';
-import { WormholesReport } from './WormholesReport';
+import { WhCreditsTab } from './WhCreditsAdmin';
 
 // Register only the chart pieces we actually use — keeps the bundle lean.
 ChartJS.register(ArcElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
@@ -63,13 +63,14 @@ function RolesInfoModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-type Tab = 'users' | 'access' | 'maps' | 'reports' | 'audit' | 'discord' | 'bridges' | 'services';
+type Tab = 'users' | 'access' | 'maps' | 'reports' | 'wormholes' | 'audit' | 'discord' | 'bridges' | 'services';
 
 const ALL_TABS: { key: Tab; path: string }[] = [
   { key: 'users',   path: '/admin/users'   },
   { key: 'access',  path: '/admin/access'  },
   { key: 'maps',    path: '/admin/maps'    },
   { key: 'reports', path: '/admin/reports' },
+  { key: 'wormholes', path: '/admin/wormholes' },
   { key: 'discord', path: '/admin/discord' },
   { key: 'audit',   path: '/admin/audit'   },
   { key: 'bridges',  path: '/admin/bridges'  },
@@ -85,6 +86,7 @@ export function AdminPage() {
   const tabs = useMemo(
     () => ALL_TABS.filter((t) => {
       if (t.key === 'reports') return isAdmin || canSeeReports;
+      if (t.key === 'wormholes') return isAdmin || canSeeReports;
       if (t.key === 'users')   return isAdmin || canSeeReports;
       return isAdmin;
     }),
@@ -115,6 +117,7 @@ export function AdminPage() {
         {tab === 'access'  && isAdmin       && <AccessTab />}
         {tab === 'maps'    && isAdmin       && <MapsTab />}
         {tab === 'reports' && (isAdmin || canSeeReports) && <ReportsTab />}
+        {tab === 'wormholes' && (isAdmin || canSeeReports) && <WhCreditsTab isAdmin={isAdmin} />}
         {tab === 'discord' && isAdmin       && <DiscordTab />}
         {tab === 'audit'   && isAdmin       && <AuditTab />}
         {tab === 'bridges'  && isAdmin      && <JumpBridgesTab />}
@@ -129,6 +132,7 @@ function pathToTab(path: string, isAdmin: boolean, canSeeReports: boolean): Tab 
   if (path.startsWith('/admin/access'))  return isAdmin       ? 'access'  : fallback;
   if (path.startsWith('/admin/maps'))    return isAdmin       ? 'maps'    : fallback;
   if (path.startsWith('/admin/reports')) return (isAdmin || canSeeReports) ? 'reports' : fallback;
+  if (path.startsWith('/admin/wormholes')) return (isAdmin || canSeeReports) ? 'wormholes' : fallback;
   if (path.startsWith('/admin/discord')) return isAdmin       ? 'discord' : fallback;
   if (path.startsWith('/admin/audit'))   return isAdmin       ? 'audit'   : fallback;
   if (path.startsWith('/admin/bridges'))  return isAdmin      ? 'bridges'  : fallback;
@@ -1123,21 +1127,19 @@ function IskMapsSection() {
 
 // ── Reports tab ─────────────────────────────────────────────────────────────
 
-type ReportKind = 'users' | 'systems' | 'wormholes' | 'ghost-sites';
+type ReportKind = 'users' | 'systems' | 'ghost-sites';
 
 const REPORTS: { key: ReportKind }[] = [
   { key: 'users'       },
   { key: 'systems'     },
-  { key: 'wormholes'   },
   { key: 'ghost-sites' },
 ];
 
 // 'ghost-sites' doesn't map cleanly onto a dotted i18n key, so spell the
 // sub-tab labels out rather than building keys dynamically.
-const REPORT_TAB_KEY: Record<ReportKind, 'admin.reports.tabs.users' | 'admin.reports.tabs.systems' | 'admin.reports.tabs.wormholes' | 'admin.reports.tabs.ghostSites'> = {
+const REPORT_TAB_KEY: Record<ReportKind, 'admin.reports.tabs.users' | 'admin.reports.tabs.systems' | 'admin.reports.tabs.ghostSites'> = {
   users:         'admin.reports.tabs.users',
   systems:       'admin.reports.tabs.systems',
-  wormholes:     'admin.reports.tabs.wormholes',
   'ghost-sites': 'admin.reports.tabs.ghostSites',
 };
 
@@ -1199,7 +1201,6 @@ function ReportsTab() {
 
       {kind === 'users'       && <UsersReport />}
       {kind === 'systems'     && <SystemsReport />}
-      {kind === 'wormholes'   && <WormholesReport />}
       {kind === 'ghost-sites' && canSeeReports && <GhostSitesReport />}
     </>
   );
@@ -1207,7 +1208,6 @@ function ReportsTab() {
 
 function pathToReport(path: string, canSeeReports: boolean): ReportKind {
   if (path.startsWith('/admin/reports/systems'))                       return 'systems';
-  if (path.startsWith('/admin/reports/wormholes'))                     return 'wormholes';
   if (path.startsWith('/admin/reports/ghost-sites') && canSeeReports)  return 'ghost-sites';
   return 'users';
 }

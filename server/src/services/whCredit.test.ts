@@ -5,7 +5,8 @@ const known = new Set(['N944', 'C247', 'K162']);
 const conn = (over: Partial<CreditConn> = {}): CreditConn => ({
   id: 'c1', mapId: 'm1', connectionType: 'standard', createdVia: 'jump', createdByUserId: 10,
   whType: 'N944', whTypeSetByUserId: null, sourceSystemId: 'A', targetSystemId: 'B',
-  sourceEveId: 1, targetEveId: 2, sourceSignatureId: null, targetSignatureId: null, ...over,
+  sourceEveId: 1, targetEveId: 2, sourceRegionId: null, targetRegionId: null,
+  sourceSignatureId: null, targetSignatureId: null, ...over,
 });
 const sig = (over: Partial<CreditSig> = {}): CreditSig => ({
   id: 's1', systemId: 'A', sigType: 'wormhole', whType: 'N944', whTypeSetByUserId: 20, fromMerge: false, ...over,
@@ -49,6 +50,13 @@ describe('evaluate', () => {
     expect(evaluate(conn({ connectionType: 'gate' }), [sig()], known)).toBeNull();
     expect(evaluate(conn({ createdByUserId: null }), [sig()], known)).toBeNull();
   });
+  it('never credits a hole with either end in an excluded region', () => {
+    const ex = new Set([10]);
+    expect(evaluate(conn({ sourceRegionId: 10 }), [sig()], known, ex)).toBeNull();
+    expect(evaluate(conn({ targetRegionId: 10 }), [sig()], known, ex)).toBeNull();
+    expect(evaluate(conn({ sourceRegionId: 11, targetRegionId: 12 }), [sig()], known, ex)).not.toBeNull();
+  });
+
   it('refuses K162, a blank, and a code the SDE does not know', () => {
     expect(evaluate(conn({ whType: 'K162' }), [sig({ whType: 'K162' })], known)).toBeNull();
     expect(evaluate(conn({ whType: '' }), [sig()], known)).toBeNull();

@@ -1159,6 +1159,15 @@ export async function migrate() {
     CREATE INDEX IF NOT EXISTS idx_wh_credits_time ON wh_credits (credited_at);
     CREATE INDEX IF NOT EXISTS idx_wh_credits_pair
       ON wh_credits (map_id, from_eve_system_id, to_eve_system_id, credited_at);
+    -- Regions whose holes never earn a credit: a connection with EITHER end
+    -- in one of these is skipped by services/whCredit.ts. Managed on
+    -- Admin › Wormhole credits. Only affects holes credited from then on.
+    CREATE TABLE IF NOT EXISTS wh_credit_excluded_regions (
+      region_id   INTEGER     PRIMARY KEY,
+      region_name TEXT        NOT NULL DEFAULT '',
+      added_by    INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
 
     -- One row per corp whose gates a structure reader has listed. enabled is
     -- the per-corp switch on Admin › Jump bridges › Corporations: off takes

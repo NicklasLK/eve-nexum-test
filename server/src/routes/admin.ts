@@ -1278,6 +1278,44 @@ reportsRouter.get('/wormholes', async (req, res) => {
   });
 });
 
+// ── Wormhole credits: excluded regions (Admin › Wormhole credits) ────────────
+// A hole with either end in one of these regions never earns a credit
+// (services/whCredit.ts). Read by anyone who can see reports; edited by admins.
+reportsRouter.get('/wormholes/excluded-regions', async (_req, res) => {
+  const { rows } = await db.query(
+    `SELECT r.region_id AS "regionId", r.region_name AS "regionName", u.character_name AS "addedBy", r.created_at AS "createdAt"
+       FROM wh_credit_excluded_regions r LEFT JOIN users u ON u.id = r.added_by
+      ORDER BY r.region_name`,
+  );
+  res.json({ regions: rows });
+});
+
+// GET /api/admin/wh-credits/regions — every region, K- and J-space, for the picker.
+adminRouter.get('/wh-credits/regions', async (_req, res) => {
+  const { rows } = await db.query<{ id: number; name: string }>(`SELECT id, name FROM map_regions ORDER BY name`);
+  res.json({ regions: rows.map((r) => ({ ...r, kspace: r.id < 11000000 })) });
+});
+
+adminRouter.put('/wh-credits/excluded-regions/:regionId', async (req, res) => {
+  const id = Number(req.params.regionId);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: 'Bad region id' }); return; }
+  const { rows } = await db.query<{ name: string }>(`SELECT name FROM map_regions WHERE id = $1`, [id]);
+  if (!rows.length) { res.status(404).json({ error: 'Unknown region' }); return; }
+  await db.query(
+    `INSERT INTO wh_credit_excluded_regions (region_id, region_name, added_by) VALUES ($1, $2, $3)
+     ON CONFLICT (region_id) DO NOTHING`,
+    [id, rows[0].name, req.session.userId ?? null],
+  );
+  res.json({ ok: true, regionId: id, regionName: rows[0].name });
+});
+
+adminRouter.delete('/wh-credits/excluded-regions/:regionId', async (req, res) => {
+  const id = Number(req.params.regionId);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: 'Bad region id' }); return; }
+  await db.query(`DELETE FROM wh_credit_excluded_regions WHERE region_id = $1`, [id]);
+  res.json({ ok: true });
+});
+
 // GET /api/admin/reports/systems — aggregate signatures across every map
 // (personal + corp), optionally constrained to ?window=24h|week|month|year|all
 // (default 'all'). The chart-series bucketing adapts to the window: hourly for 24h,
