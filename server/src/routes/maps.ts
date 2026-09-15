@@ -18,6 +18,7 @@ import { streamMapEvents } from '../services/mapStream.js';
 import { listVisibleMaps, loadFullMap, loadSystemSignatures, loadSystemAnomalies, loadSystemStructures, CONNECTION_COLS } from '../services/mapRead.js';
 import { connectionTypeError, connectionEndpointEveIds, systemEveIds } from '../services/connectionRules.js';
 import { resolveCreatedVia, namesTyper, lastKnownSystemId } from '../services/connectionOrigin.js';
+import { creditSoon } from '../services/whCredit.js';
 import { sdeSystemFacts } from '../services/sdeFacts.js';
 import { contributorIsAtSystem, contributorMayLinkSystems } from '../services/contributorMovement.js';
 import { listConnectionJumps, recordConnectionJump, setConnectionJumpHot, clearConnectionJumps } from '../services/connectionJumps.js';
@@ -3732,6 +3733,8 @@ mapsRouter.patch('/:mapId/connections/:connectionId', async (req, res) => {
   // it's deduped, so a connection already announced won't fire again.
   if (typeof updates.type === 'string' && updates.type.trim() !== '') {
     maybeBroadcastConnection(access, mapId, connectionId, req.session.characterName ?? null);
+    // A code on a jump-made link may complete a wormhole credit.
+    creditSoon(mapId, connectionId);
   }
   res.json({ ok: true });
 });

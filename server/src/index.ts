@@ -55,6 +55,7 @@ import fleetRoutesRouter from './routes/fleetRoutes.js';
 import { jumpBridgesRouter } from './routes/jumpBridges.js';
 import { bridgeServicesRouter } from './routes/bridgeServices.js';
 import { startStructureReaderSync } from './services/structureReaderSync.js';
+import { startWhCreditSweeper } from './services/whCredit.js';
 import { backfillGrantedScopes } from './services/scopeBackfill.js';
 import { authLimiter, esiLimiter, publicLimiter, appLimiter } from './middleware/rateLimits.js';
 import { originGuard } from './middleware/originGuard.js';
@@ -212,6 +213,7 @@ migrate()
     startConnLifetimeSweeper();
     startIskDonationPoller();
     startStructureReaderSync();
+    startWhCreditSweeper();
     startAccessRevalidation();
     startKillFeed();
     void startTelemetry();

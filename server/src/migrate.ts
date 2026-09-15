@@ -1141,6 +1141,25 @@ export async function migrate() {
     ALTER TABLE map_connections ADD COLUMN IF NOT EXISTS created_by_user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL;
     ALTER TABLE map_connections ADD COLUMN IF NOT EXISTS wh_type_set_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
 
+    -- Wormhole credits (plans/wh-scan-bounties.md): one row per hole once its
+    -- connection is jump-made and carries a real code. No FK to the
+    -- connection on purpose — the row must outlive the hole so last month's
+    -- report still counts it. The system pair is the dedupe key: the same
+    -- pair on the same map within 24 h credits once (services/whCredit.ts).
+    CREATE TABLE IF NOT EXISTS wh_credits (
+      connection_id      UUID        PRIMARY KEY,
+      map_id             UUID        NOT NULL,
+      jumper_user_id     INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+      typer_user_id      INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+      wh_type            TEXT        NOT NULL,
+      from_eve_system_id INTEGER,
+      to_eve_system_id   INTEGER,
+      credited_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_wh_credits_time ON wh_credits (credited_at);
+    CREATE INDEX IF NOT EXISTS idx_wh_credits_pair
+      ON wh_credits (map_id, from_eve_system_id, to_eve_system_id, credited_at);
+
     -- One row per corp whose gates a structure reader has listed. enabled is
     -- the per-corp switch on Admin › Jump bridges › Corporations: off takes
     -- every bridge of that corp out of planning and off the alliance maps at
