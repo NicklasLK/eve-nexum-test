@@ -118,11 +118,11 @@ async function applyPlan(map: MapRow, plan: ProjPlan): Promise<boolean> {
       const ph: string[] = []; const vals: unknown[] = [];
       for (const i of inserts) {
         const n = vals.length;
-        ph.push(`($${n + 1}, $${n + 2}, $${n + 3}, $${n + 4}, 'jumpgate', 'large', $${n + 5}, $${n + 6})`);
+        ph.push(`($${n + 1}, $${n + 2}, $${n + 3}, $${n + 4}, 'jumpgate', 'large', $${n + 5}, $${n + 6}, 'bridge_sync')`);
         vals.push(randomUUID(), map.id, i.sourceId, i.targetId, i.broken, i.bridgeId);
       }
       await client.query(
-        `INSERT INTO map_connections (id, map_id, source_id, target_id, connection_type, size, broken, jump_bridge_id)
+        `INSERT INTO map_connections (id, map_id, source_id, target_id, connection_type, size, broken, jump_bridge_id, created_via)
          VALUES ${ph.join(', ')}`, vals,
       );
     }

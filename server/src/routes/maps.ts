@@ -17,6 +17,7 @@ import { projectBridgesSoon } from '../services/bridgeMapSync.js';
 import { streamMapEvents } from '../services/mapStream.js';
 import { listVisibleMaps, loadFullMap, loadSystemSignatures, loadSystemAnomalies, loadSystemStructures, CONNECTION_COLS } from '../services/mapRead.js';
 import { connectionTypeError, connectionEndpointEveIds, systemEveIds } from '../services/connectionRules.js';
+import { resolveCreatedVia, namesTyper, lastKnownSystemId } from '../services/connectionOrigin.js';
 import { sdeSystemFacts } from '../services/sdeFacts.js';
 import { contributorIsAtSystem, contributorMayLinkSystems } from '../services/contributorMovement.js';
 import { listConnectionJumps, recordConnectionJump, setConnectionJumpHot, clearConnectionJumps } from '../services/connectionJumps.js';
@@ -2177,7 +2178,7 @@ mapsRouter.post('/:mapId/merge', async (req, res) => {
     const seenPair = new Set<string>();
     for (const c of destConnRes.rows) seenPair.add(pairKey(c.sourceId, c.targetId));
 
-    const connCols = 11;
+    const connCols = 12;
     const connPlaceholders: string[] = [];
     const connValues: unknown[] = [];
     let addedConnections = 0;
@@ -2193,6 +2194,7 @@ mapsRouter.post('/:mapId/merge', async (req, res) => {
       connValues.push(
         crypto.randomUUID(), destId, src, tgt, c.sourceHandle ?? null, c.targetHandle ?? null,
         c.connectionType ?? 'standard', c.massStatus ?? null, c.timeStatus ?? null, c.size ?? 'large', c.whType ?? null,
+        'merge',
       );
       addedConnections++;
     }
@@ -2200,7 +2202,7 @@ mapsRouter.post('/:mapId/merge', async (req, res) => {
       await client.query(
         `INSERT INTO map_connections
            (id, map_id, source_id, target_id, source_handle, target_handle,
-            connection_type, mass_status, time_status, size, wh_type)
+            connection_type, mass_status, time_status, size, wh_type, created_via)
          VALUES ${connPlaceholders.join(',')}`,
         connValues,
       );
@@ -2930,7 +2932,7 @@ mapsRouter.delete('/:mapId/systems/:systemId', async (req, res) => {
 
 mapsRouter.post('/:mapId/connections', async (req, res) => {
   const { mapId } = req.params;
-  const { id, sourceId, targetId, sourceHandle, targetHandle, connectionType, massStatus, timeStatus, size, sourceEveId, targetEveId } = req.body;
+  const { id, sourceId, targetId, sourceHandle, targetHandle, connectionType, massStatus, timeStatus, size, sourceEveId, targetEveId, createdVia: createdViaRaw } = req.body;
 
   const access = await requireMapWrite(res, mapId, req, true);
   if (!access) return;
@@ -2992,24 +2994,27 @@ mapsRouter.post('/:mapId/connections', async (req, res) => {
   // A client-supplied 'gate'/'jumpgate'/'cyno' was previously taken on trust, so
   // an impossible edge (a stargate between two wormhole systems) could be
   // created outright. Anything auto-classified above passes by construction.
-  const typeError = await connectionTypeError(
-    effectiveType,
-    (typeof sourceEveId === 'number' && typeof targetEveId === 'number')
-      ? { sourceEveId, targetEveId }
-      : await systemEveIds(sourceId, targetId),
-  );
+  const ep = (typeof sourceEveId === 'number' && typeof targetEveId === 'number')
+    ? { sourceEveId, targetEveId }
+    : await systemEveIds(sourceId, targetId);
+  const typeError = await connectionTypeError(effectiveType, ep);
   if (typeError) { res.status(400).json({ error: typeError }); return; }
+
+  // Origin, for the wormhole credits: the client says 'jump' for a link its
+  // tracker drew; the server believes it only when the pilot is at one end.
+  const actorId = authUser(req).userId;
+  const createdVia = resolveCreatedVia(createdViaRaw, await lastKnownSystemId(actorId), ep.sourceEveId, ep.targetEveId);
 
   let inserted = 0;
   try {
     const ins = await db.query(
       `INSERT INTO map_connections
          (id, map_id, source_id, target_id, source_handle, target_handle,
-          connection_type, mass_status, time_status, size)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          connection_type, mass_status, time_status, size, created_via, created_by_user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT (id) DO NOTHING`,
       [id, mapId, sourceId, targetId, sourceHandle ?? null, targetHandle ?? null,
-       effectiveType, massStatus ?? null, timeStatus ?? null, size ?? 'large'],
+       effectiveType, massStatus ?? null, timeStatus ?? null, size ?? 'large', createdVia, actorId],
     );
     inserted = ins.rowCount ?? 0;
   } catch (err) {
@@ -3704,6 +3709,16 @@ mapsRouter.patch('/:mapId/connections/:connectionId', async (req, res) => {
     }
   }
 
+  // A real code arriving where there was none names the typer (wormhole
+  // credits). COALESCE keeps the first one; a later re-type changes nothing.
+  if ('type' in updates) {
+    const { rows: prevRows } = await db.query<{ wh_type: string | null }>(
+      `SELECT wh_type FROM map_connections WHERE id = $1 AND map_id = $2`, [connectionId, mapId]);
+    if (prevRows.length && namesTyper(prevRows[0].wh_type, updates.type)) {
+      sets.push(`wh_type_set_by_user_id = COALESCE(wh_type_set_by_user_id, $${vals.length + 1})`);
+      vals.push(authUser(req).userId);
+    }
+  }
   if (!sets.length) { res.status(400).json({ error: 'Nothing to update' }); return; }
 
   await db.query(

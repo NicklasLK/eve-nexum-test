@@ -238,7 +238,7 @@ export function applyJump(
       const { sourceHandle, targetHandle } = srcPos && tgtPos
         ? pickHandles(srcPos, tgtPos)
         : { sourceHandle: 'right' as const, targetHandle: 'left' as const };
-      jumpConnId = addConnection(prevMapSystemId, mapSystemId, sourceHandle, targetHandle);
+      jumpConnId = addConnection(prevMapSystemId, mapSystemId, sourceHandle, targetHandle, 'jump');
     }
   }
 

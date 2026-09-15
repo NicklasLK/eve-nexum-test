@@ -3,6 +3,7 @@ import { publishToMap } from './mapEvents.js';
 import { syncSignature, syncAnomaly } from './crossMapSync.js';
 import { recordGhostSiteIfMatch } from './ghostSites.js';
 import { createLogger } from '../utils/logger.js';
+import { namesTyper } from './connectionOrigin.js';
 
 const log = createLogger('map-write');
 
@@ -54,11 +55,12 @@ function logIfContentless(mapId: string, systemId: string, d: SignatureInput, ac
 export async function createSignature(mapId: string, systemId: string, d: SignatureInput, actor: WriteActor) {
   logIfContentless(mapId, systemId, d, actor);
   const { rows } = await db.query(
-    `INSERT INTO map_signatures (system_id, sig_id, sig_type, name, notes, wh_type, wh_leads_to, ghost_type, created_by_user_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO map_signatures (system_id, sig_id, sig_type, name, notes, wh_type, wh_leads_to, ghost_type, created_by_user_id, wh_type_set_by_user_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING id, sig_id AS "sigId", sig_type AS "sigType", name, notes, wh_type AS "whType", wh_leads_to AS "whLeadsTo",
                ghost_type AS "ghostType", created_at AS "createdAt"`,
-    [systemId, d.sigId, d.sigType, d.name, d.notes, d.whType, d.whLeadsTo, d.ghostType, actor.userId],
+    [systemId, d.sigId, d.sigType, d.name, d.notes, d.whType, d.whLeadsTo, d.ghostType, actor.userId,
+     namesTyper('', d.whType) ? actor.userId : null],
   );
   db.query(`INSERT INTO user_events (user_id, event_type, sig_type) VALUES ($1, 'signature', $2)`,
     [actor.userId, d.sigType]).catch(console.error);
@@ -80,13 +82,16 @@ const SIG_COLS: Record<string, string> = {
 export async function updateSignature(
   mapId: string, systemId: string, sigId: string, updates: Record<string, unknown>, actor: WriteActor,
 ): Promise<{ dispatchK162: boolean; flushK162: boolean }> {
-  const settingK162 = typeof updates.whType === 'string' && updates.whType.toUpperCase() === 'K162';
-  let prevWasK162 = false;
-  if (settingK162) {
+  // The previous code decides both the K162 notice and whether this write
+  // names the typer (a real code where there was none).
+  let prevWhType: string | null = null;
+  if ('whType' in updates) {
     const { rows: prev } = await db.query<{ wh_type: string | null }>(
       `SELECT wh_type FROM map_signatures WHERE id = $1 AND system_id = $2`, [sigId, systemId]);
-    prevWasK162 = (prev[0]?.wh_type ?? '').toUpperCase() === 'K162';
+    prevWhType = prev[0]?.wh_type ?? null;
   }
+  const settingK162 = typeof updates.whType === 'string' && updates.whType.toUpperCase() === 'K162';
+  const prevWasK162 = (prevWhType ?? '').toUpperCase() === 'K162';
 
   // The other way a blank row can appear: an existing signature's scan id being
   // cleared. Only the ID input writes this, on every keystroke, so a legitimate
@@ -102,6 +107,10 @@ export async function updateSignature(
   const vals: unknown[] = [];
   for (const [key, col] of Object.entries(SIG_COLS)) {
     if (key in updates) { sets.push(`${col} = $${vals.length + 1}`); vals.push(updates[key]); }
+  }
+  if (namesTyper(prevWhType, updates.whType)) {
+    sets.push(`wh_type_set_by_user_id = COALESCE(wh_type_set_by_user_id, $${vals.length + 1})`);
+    vals.push(actor.userId);
   }
   await db.query(
     `UPDATE map_signatures SET ${sets.join(', ')} WHERE id = $${vals.length + 1} AND system_id = $${vals.length + 2} AND ${inThisMap(vals.length + 3)}`,

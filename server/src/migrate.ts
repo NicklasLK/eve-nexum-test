@@ -464,6 +464,10 @@ export async function migrate() {
     -- live signature pane still reads the real table (merged sigs show on the
     -- map, they just don't inflate anyone's numbers).
     ALTER TABLE map_signatures ADD COLUMN IF NOT EXISTS from_merge BOOLEAN NOT NULL DEFAULT FALSE;
+    -- The pilot whose write turned this sig's wh_type from empty/K162 into a
+    -- real code — the "typer" for wormhole credits (plans/wh-scan-bounties.md).
+    -- Set once, never overwritten.
+    ALTER TABLE map_signatures ADD COLUMN IF NOT EXISTS wh_type_set_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
     CREATE OR REPLACE VIEW reportable_signatures AS
       SELECT * FROM map_signatures WHERE from_merge = FALSE;
 
@@ -1126,6 +1130,16 @@ export async function migrate() {
     ALTER TABLE map_connections ADD COLUMN IF NOT EXISTS jump_bridge_id INTEGER;
     CREATE INDEX IF NOT EXISTS idx_map_connections_bridge
       ON map_connections (jump_bridge_id) WHERE jump_bridge_id IS NOT NULL;
+
+    -- Who made a link and how, for wormhole credits (plans/wh-scan-bounties.md).
+    -- created_via: manual (drawn, imported, seeded), jump (the pilot's own
+    -- tracked crossing — accepted only when their last known system is one
+    -- end), merge (copied from another map), bridge_sync (Ansiblex
+    -- projection). wh_type_set_by_user_id: the pilot whose write turned
+    -- wh_type from empty/K162 into a real code; set once, never overwritten.
+    ALTER TABLE map_connections ADD COLUMN IF NOT EXISTS created_via            TEXT NOT NULL DEFAULT 'manual';
+    ALTER TABLE map_connections ADD COLUMN IF NOT EXISTS created_by_user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE map_connections ADD COLUMN IF NOT EXISTS wh_type_set_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
 
     -- One row per corp whose gates a structure reader has listed. enabled is
     -- the per-corp switch on Admin › Jump bridges › Corporations: off takes

@@ -141,7 +141,7 @@ export async function copyMap(params: {
     await insertBatch(client, 'map_connections',
       ['id', 'map_id', 'source_id', 'target_id', 'source_handle', 'target_handle', 'connection_type',
        'mass_status', 'time_status', 'size', 'wh_type', 'mass_used', 'eol_at', 'lifetime_expires_at', 'broken',
-       'source_signature_id', 'target_signature_id'],
+       'source_signature_id', 'target_signature_id', 'created_via'],
       connRes.rows.flatMap((c): unknown[][] => {
         const src = sysIdMap.get(c.sourceId);
         const tgt = sysIdMap.get(c.targetId);
@@ -149,7 +149,7 @@ export async function copyMap(params: {
         return [[
           crypto.randomUUID(), newMapId, src, tgt, c.sourceHandle, c.targetHandle, c.connectionType,
           c.massStatus, c.timeStatus, c.size, c.whType, c.massUsed, c.eolAt, c.lifetimeExpiresAt, c.broken,
-          remapSig(c.sourceSignatureId), remapSig(c.targetSignatureId),
+          remapSig(c.sourceSignatureId), remapSig(c.targetSignatureId), 'merge',
         ]];
       }),
     );

@@ -318,7 +318,9 @@ interface MapStore {
   moveSystem: (id: string, position: { x: number; y: number }, opts?: { skipUndo?: boolean }) => void;
 
   // Connections
-  addConnection: (sourceId: string, targetId: string, sourceHandle?: string | null, targetHandle?: string | null) => string;
+  // `origin` is 'jump' only for a link the location tracker drew; the server
+  // verifies the pilot is at one end before believing it (wormhole credits).
+  addConnection: (sourceId: string, targetId: string, sourceHandle?: string | null, targetHandle?: string | null, origin?: 'manual' | 'jump') => string;
   updateConnection: (id: string, updates: Partial<Omit<MapConnection, 'id'>>) => void;
   removeConnection: (id: string) => void;
   // Re-route every connection's handles to the nearest sides given current
@@ -1140,7 +1142,7 @@ export const useMapStore = create<MapStore>()((set, get) => {
 
     // ── Connections ───────────────────────────────────────────────────────────
 
-    addConnection: (sourceId, targetId, sourceHandle = null, targetHandle = null) => {
+    addConnection: (sourceId, targetId, sourceHandle = null, targetHandle = null, origin = 'manual') => {
       const { activeMapId } = get();
       const id = uuid();
 
@@ -1180,7 +1182,7 @@ export const useMapStore = create<MapStore>()((set, get) => {
           const systemsNow  = get().map.systems;
           const sourceEveId = systemsNow.find((s) => s.id === conn.sourceId)?.eveSystemId ?? null;
           const targetEveId = systemsNow.find((s) => s.id === conn.targetId)?.eveSystemId ?? null;
-          const body = JSON.stringify({ ...conn, sourceEveId, targetEveId });
+          const body = JSON.stringify({ ...conn, sourceEveId, targetEveId, createdVia: origin });
           // On a jump the endpoint system(s) are being created this same tick;
           // wait for their create POST to land before POSTing the connection, or
           // its FK to map_systems violates (server 409) and the classification
