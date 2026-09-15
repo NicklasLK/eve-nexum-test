@@ -24,6 +24,7 @@ import { CaretUpIcon, CaretDownIcon, XIcon, ArrowSquareOutIcon } from '../../ico
 import { createPortal } from 'react-dom';
 import styles from './AdminPage.module.css';
 import { JumpBridgesTab, BridgeServicesTab } from './FleetRoutesAdmin';
+import { WormholesReport } from './WormholesReport';
 
 // Register only the chart pieces we actually use — keeps the bundle lean.
 ChartJS.register(ArcElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
@@ -1122,19 +1123,21 @@ function IskMapsSection() {
 
 // ── Reports tab ─────────────────────────────────────────────────────────────
 
-type ReportKind = 'users' | 'systems' | 'ghost-sites';
+type ReportKind = 'users' | 'systems' | 'wormholes' | 'ghost-sites';
 
 const REPORTS: { key: ReportKind }[] = [
   { key: 'users'       },
   { key: 'systems'     },
+  { key: 'wormholes'   },
   { key: 'ghost-sites' },
 ];
 
 // 'ghost-sites' doesn't map cleanly onto a dotted i18n key, so spell the
 // sub-tab labels out rather than building keys dynamically.
-const REPORT_TAB_KEY: Record<ReportKind, 'admin.reports.tabs.users' | 'admin.reports.tabs.systems' | 'admin.reports.tabs.ghostSites'> = {
+const REPORT_TAB_KEY: Record<ReportKind, 'admin.reports.tabs.users' | 'admin.reports.tabs.systems' | 'admin.reports.tabs.wormholes' | 'admin.reports.tabs.ghostSites'> = {
   users:         'admin.reports.tabs.users',
   systems:       'admin.reports.tabs.systems',
+  wormholes:     'admin.reports.tabs.wormholes',
   'ghost-sites': 'admin.reports.tabs.ghostSites',
 };
 
@@ -1196,6 +1199,7 @@ function ReportsTab() {
 
       {kind === 'users'       && <UsersReport />}
       {kind === 'systems'     && <SystemsReport />}
+      {kind === 'wormholes'   && <WormholesReport />}
       {kind === 'ghost-sites' && canSeeReports && <GhostSitesReport />}
     </>
   );
@@ -1203,6 +1207,7 @@ function ReportsTab() {
 
 function pathToReport(path: string, canSeeReports: boolean): ReportKind {
   if (path.startsWith('/admin/reports/systems'))                       return 'systems';
+  if (path.startsWith('/admin/reports/wormholes'))                     return 'wormholes';
   if (path.startsWith('/admin/reports/ghost-sites') && canSeeReports)  return 'ghost-sites';
   return 'users';
 }

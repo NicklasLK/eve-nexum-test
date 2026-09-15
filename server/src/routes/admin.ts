@@ -1224,6 +1224,60 @@ const SYSTEMS_CHART_SPEC: Record<string, { trunc: string; step: string; count: n
   'all':   'all',
 };
 
+// Calendar month in UTC (EVE time) for the wormholes report: 'YYYY-MM' → [from, to).
+// Anything unparseable means last month.
+function monthBounds(raw: unknown): { key: string; from: Date; to: Date } {
+  const now = new Date();
+  let y = now.getUTCFullYear(), m = now.getUTCMonth() - 1;
+  if (typeof raw === 'string' && /^d{4}-(0[1-9]|1[0-2])$/.test(raw)) { y = Number(raw.slice(0, 4)); m = Number(raw.slice(5)) - 1; }
+  const from = new Date(Date.UTC(y, m, 1));
+  const to   = new Date(Date.UTC(y, m + 1, 1));
+  return { key: `${from.getUTCFullYear()}-${String(from.getUTCMonth() + 1).padStart(2, '0')}`, from, to };
+}
+
+// GET /api/admin/reports/wormholes?month=YYYY-MM — wormhole credits per pilot
+// for one calendar month (UTC). A hole credits its jumper and its typer: one
+// wormhole when they are the same pilot, half each otherwise (wh_credits,
+// services/whCredit.ts). Nothing about ISK — the page multiplies by whatever
+// the admin types in. Scoped to the caller's corp/alliance maps like the other
+// reports.
+reportsRouter.get('/wormholes', async (req, res) => {
+  const scope = corpScopeFor(req);
+  if (scope === null) { res.status(403).json({ error: 'No corp affiliation' }); return; }
+  const month = monthBounds(req.query.month);
+  const params: unknown[] = scope.param !== null ? [scope.param] : [];
+  const corpSql = scope.sql(1);
+  params.push(month.from, month.to);
+  const pFrom = `$${params.length - 1}`, pTo = `$${params.length}`;
+  const inMonth = `c.credited_at >= ${pFrom} AND c.credited_at < ${pTo} AND ${corpSql}`;
+
+  const [{ rows }, { rows: totalRows }] = await Promise.all([
+    db.query<{ userId: number; characterId: number; characterName: string; corpId: number | null; jumped: number; typed: number; wormholes: number }>(`
+      SELECT u.id AS "userId", u.character_id AS "characterId", u.character_name AS "characterName", u.corp_id AS "corpId",
+             COUNT(*) FILTER (WHERE c.jumper_user_id = u.id)::int AS jumped,
+             COUNT(*) FILTER (WHERE c.typer_user_id  = u.id)::int AS typed,
+             SUM(CASE WHEN c.jumper_user_id = u.id AND c.typer_user_id = u.id THEN 1.0
+                      WHEN c.jumper_user_id = u.id OR  c.typer_user_id = u.id THEN 0.5
+                      ELSE 0 END)::float8 AS wormholes
+        FROM wh_credits c
+        JOIN maps  m ON m.id = c.map_id
+        JOIN users u ON u.id = c.jumper_user_id OR u.id = c.typer_user_id
+       WHERE ${inMonth}
+       GROUP BY u.id
+       ORDER BY wormholes DESC, u.character_name`, params),
+    db.query<{ n: number }>(`SELECT COUNT(*)::int AS n FROM wh_credits c JOIN maps m ON m.id = c.map_id WHERE ${inMonth}`, params),
+  ]);
+  const corpInfo = await resolveCorps(rows.map((r) => r.corpId).filter((id): id is number => id !== null));
+  res.json({
+    month: month.key, from: month.from, to: month.to,
+    totalHoles: totalRows[0]?.n ?? 0,
+    rows: rows.map((r) => {
+      const c = r.corpId !== null ? corpInfo.get(r.corpId) : null;
+      return { ...r, corpTicker: c?.ticker ?? null, corpName: c?.name ?? null };
+    }),
+  });
+});
+
 // GET /api/admin/reports/systems — aggregate signatures across every map
 // (personal + corp), optionally constrained to ?window=24h|week|month|year|all
 // (default 'all'). The chart-series bucketing adapts to the window: hourly for 24h,
