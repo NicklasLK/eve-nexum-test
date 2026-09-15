@@ -20,7 +20,9 @@ import { connectionTypeError, connectionEndpointEveIds, systemEveIds } from '../
 import { resolveCreatedVia, namesTyper, lastKnownSystemId } from '../services/connectionOrigin.js';
 import { creditSoon } from '../services/whCredit.js';
 import { sdeSystemFacts } from '../services/sdeFacts.js';
-import { contributorIsAtSystem, contributorMayLinkSystems } from '../services/contributorMovement.js';
+import {
+  contributorIsAtSystem, contributorMayLinkSystems, isUnbreakOnly, contributorMayUnbreakConnection,
+} from '../services/contributorMovement.js';
 import { listConnectionJumps, recordConnectionJump, setConnectionJumpHot, clearConnectionJumps } from '../services/connectionJumps.js';
 import {
   createSignature, updateSignature, deleteSignature,
@@ -3594,8 +3596,22 @@ mapsRouter.post('/:mapId/untangle-layout', async (req, res) => {
 mapsRouter.patch('/:mapId/connections/:connectionId', async (req, res) => {
   const { mapId, connectionId } = req.params;
 
-  const access = await requireMapWrite(res, mapId, req);
+  // The one PATCH a contributor may make: `{ broken: false }` on a connection
+  // they have just jumped (the tracker un-quarantines a link by crossing it).
+  // Exempt exactly that shape from the blanket role refusal so the movement
+  // proof below can run; any other body stays refused for them as before.
+  const unbreakOnly = isUnbreakOnly(req.body);
+  const access = await requireMapWrite(res, mapId, req, unbreakOnly);
   if (!access) return;
+  if (unbreakOnly && access.accessKind !== 'owner' && !canEditTopology(authUser(req).role)) {
+    if (!(await contributorMayUnbreakConnection(req, mapId, connectionId))) {
+      res.status(403).json({
+        error: 'topology_forbidden',
+        message: 'Your role can only un-break a connection it has just jumped.',
+      });
+      return;
+    }
+  }
 
   const colMap: Record<string, string> = {
     connectionType: 'connection_type', massStatus: 'mass_status',

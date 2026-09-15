@@ -908,6 +908,12 @@ export async function migrate() {
     -- poll lands. No FK — system ids are immutable SDE data.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_known_system_id INTEGER;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_known_system_at TIMESTAMPTZ;
+    -- The system before that — the one the pilot has just LEFT. A contributor's
+    -- tracked add is proved against where they are, and with "don't track
+    -- K-space" on the tracker also records the K-space system they departed
+    -- from, after the fact. last_known_system_at (the moment of that move)
+    -- bounds how long it stays provable (contributorMovement.ts).
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS prev_known_system_id INTEGER;
 
     -- "Pilots online" needs two things last_known_system_at can't give it.
     -- That column is written only when a pilot MOVES, so it means "last jumped",

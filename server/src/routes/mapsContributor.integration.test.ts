@@ -191,4 +191,68 @@ describe.skipIf(!dbReady)('contributor role (integration)', () => {
       .send({ id: crypto.randomUUID(), eveSystemId: 30000144, name: 'Perimeter', systemClass: 'HS' });
     expect(res.status).toBeLessThan(300);
   });
+
+  // ── the system it has just left ────────────────────────────────────────────
+  // With "don't track K-space" on, the client records the K-space system the
+  // pilot LEFT when it jumps from there into J-space — after the fact, once the
+  // pilot is already in the J system. The proof accepts the previous system for
+  // a few minutes for exactly that, and no longer.
+
+  it('MAY add the system it has just left (skip-K-space retroactive add)', async () => {
+    await db.query(
+      `UPDATE users SET prev_known_system_id = 30000144, last_known_system_id = 31000001,
+                        last_known_system_at = NOW() WHERE id = $1`, [contributor.id]);
+    const res = await request(makeApp(contributor))
+      .post(`/api/maps/${mapId}/systems`)
+      .send({ id: crypto.randomUUID(), eveSystemId: 30000144, name: 'Perimeter', systemClass: 'HS' });
+    expect(res.status).toBeLessThan(300);
+  });
+
+  it('may NOT add a system it left a long time ago', async () => {
+    await db.query(
+      `UPDATE users SET prev_known_system_id = 30000144, last_known_system_id = 31000001,
+                        last_known_system_at = NOW() - interval '1 hour' WHERE id = $1`, [contributor.id]);
+    const res = await request(makeApp(contributor))
+      .post(`/api/maps/${mapId}/systems`)
+      .send({ id: crypto.randomUUID(), eveSystemId: 30000144, name: 'Perimeter', systemClass: 'HS' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('topology_forbidden');
+  });
+
+  // ── un-breaking a connection it jumped ─────────────────────────────────────
+
+  it('MAY un-break a connection when one end is where it is, and nothing else', async () => {
+    const connId = (await db.query<{ id: string }>(
+      `INSERT INTO map_connections (id, map_id, source_id, target_id, connection_type, broken)
+       VALUES (gen_random_uuid(), $1, $2, $3, 'standard', TRUE) RETURNING id`,
+      [mapId, homeSysId, awaySysId],
+    )).rows[0].id;
+
+    const ok = await request(makeApp(contributor))
+      .patch(`/api/maps/${mapId}/connections/${connId}`).send({ broken: false });
+    expect(ok.status).toBeLessThan(300);
+    const { rows } = await db.query<{ broken: boolean }>(`SELECT broken FROM map_connections WHERE id = $1`, [connId]);
+    expect(rows[0].broken).toBe(false);
+
+    // Breaking it, or un-breaking together with any other field, is editing.
+    const brk = await request(makeApp(contributor))
+      .patch(`/api/maps/${mapId}/connections/${connId}`).send({ broken: true });
+    expect(brk.status).toBe(403);
+    const mixed = await request(makeApp(contributor))
+      .patch(`/api/maps/${mapId}/connections/${connId}`).send({ broken: false, massStatus: 'critical' });
+    expect(mixed.status).toBe(403);
+  });
+
+  it('may NOT un-break a connection when it is in neither end', async () => {
+    await db.query(`UPDATE users SET last_known_system_id = 30000999 WHERE id = $1`, [contributor.id]);
+    const connId = (await db.query<{ id: string }>(
+      `INSERT INTO map_connections (id, map_id, source_id, target_id, connection_type, broken)
+       VALUES (gen_random_uuid(), $1, $2, $3, 'standard', TRUE) RETURNING id`,
+      [mapId, homeSysId, awaySysId],
+    )).rows[0].id;
+    const res = await request(makeApp(contributor))
+      .patch(`/api/maps/${mapId}/connections/${connId}`).send({ broken: false });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('topology_forbidden');
+  });
 });

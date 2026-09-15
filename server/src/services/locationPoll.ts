@@ -39,7 +39,8 @@ async function pollOne(userId: number, characterId: number): Promise<void> {
   if (!locRes.ok) return;
   const { solar_system_id } = await locRes.json() as { solar_system_id: number };
   await db.query(
-    `UPDATE users SET last_known_system_id = $1, last_known_system_at = NOW()
+    `UPDATE users SET prev_known_system_id = last_known_system_id,
+                      last_known_system_id = $1, last_known_system_at = NOW()
        WHERE id = $2 AND last_known_system_id IS DISTINCT FROM $1`,
     [solar_system_id, userId],
   );

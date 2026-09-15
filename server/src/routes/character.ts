@@ -157,8 +157,19 @@ async function getLocationPayload(userId: number): Promise<LocationPayload> {
     db.query(`INSERT INTO user_events (user_id, event_type) VALUES ($1, 'jump')`, [userId]).catch(console.error);
   }
   if (prevSys !== loc.solarSystemId) {
-    db.query(`UPDATE users SET last_known_system_id = $1, last_known_system_at = NOW() WHERE id = $2`,
-      [loc.solarSystemId, userId]).catch(console.error);
+    // Awaited, not fire-and-forget: a contributor's tracked add is proved
+    // against this row (contributorMovement.ts), and the client POSTs it the
+    // moment this response tells it it moved. The system being left is kept as
+    // prev_known_system_id so the add of a K-space system the pilot has JUST
+    // left — skip-K-space's retroactive add — can be proved as well.
+    await db.query(
+      `UPDATE users
+          SET prev_known_system_id = last_known_system_id,
+              last_known_system_id = $1,
+              last_known_system_at = NOW()
+        WHERE id = $2 AND last_known_system_id IS DISTINCT FROM $1`,
+      [loc.solarSystemId, userId],
+    ).catch(console.error);
   }
   lastSeenSystem.set(userId, loc.solarSystemId);
 
@@ -239,7 +250,8 @@ characterRouter.get('/:targetUserId/location', async (req, res) => {
 async function readCharacterSystem(userId: number, characterId: number): Promise<{ online: boolean; eveSystemId: number; name: string; systemClass: string | null } | null> {
   const loc = await readEsiLocation(userId, characterId);
   if (loc.status !== 'online' || loc.solarSystemId == null) return null;
-  db.query(`UPDATE users SET last_known_system_id = $1, last_known_system_at = NOW()
+  db.query(`UPDATE users SET prev_known_system_id = last_known_system_id,
+                             last_known_system_id = $1, last_known_system_at = NOW()
               WHERE id = $2 AND last_known_system_id IS DISTINCT FROM $1`,
     [loc.solarSystemId, userId]).catch(() => {});
   const { rows } = await db.query<{ eveSystemId: number; name: string; systemClass: string | null }>(

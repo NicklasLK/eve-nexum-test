@@ -33,8 +33,29 @@ export function useCanEdit(): boolean {
   // Everyone else (member or edit-share recipient) is role-gated: 'edit',
   // 'full', 'admin', 'alliance_admin' may reshape the map. 'readonly' may not,
   // and neither may 'contributor' — they edit content (useCanEditContent) but
-  // the layout is not theirs. Their own movement still records itself: tracking
-  // posts the system and the jump's connection, and the server allows those
-  // after checking they really are in that system.
+  // the layout is not theirs. Their own movement still records itself — see
+  // useCanRecordMovement, which is what the location tracker consults.
   return isAdminRole(user.role) || user.role === 'full' || user.role === 'edit';
+}
+
+// True when the current user's OWN tracked movement may grow the active map: the
+// system they just jumped into, and the connection that jump implies. Everyone
+// useCanEdit admits, plus a 'contributor' — whose role is exactly "content yes,
+// layout no, except your own jumps". The server proves the exception against
+// where the pilot actually is (contributorMovement.ts); this hook only decides
+// whether the tracker should try at all. Mirrors requireMapWrite's movement
+// exemption: a lock still freezes it, and so does a view-only share. Manual
+// adds, moves, deletes and drawn connections stay behind useCanEdit.
+export function useCanRecordMovement(): boolean {
+  const canEdit       = useCanEdit();
+  const user          = useAuth().user;
+  const locked        = useMapStore((s) => !!s.map.locked);
+  const accessKind    = useMapStore((s) => s.map.accessKind);
+  const shareCanWrite = useMapStore((s) => s.map.shareCanWrite);
+
+  if (canEdit) return true;
+  if (!user || user.role !== 'contributor') return false;
+  if (locked) return false;
+  if (accessKind === 'shared' && shareCanWrite === false) return false;
+  return true;
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useMapStore, getPlacementCell, registerPlacementFix } from '../store/mapStore';
 import { useCharacterLocation, useCharacterLocationCheckedAt } from './useCharacterLocation';
 import { useClones, cloneSystemIds } from './useClones';
-import { useCanEdit } from './useCanEdit';
+import { useCanEdit, useCanRecordMovement } from './useCanEdit';
 import { useAuth } from '../context/AuthContext';
 import { readUserSetting } from './useUserSetting';
 import { pickHandles } from '../components/map/edgeUtils';
@@ -149,6 +149,12 @@ export function applyJump(
   /** True when the pilot got here by clone jump rather than by flying — the
    *  system is still recorded, but no connection is drawn to it. */
   teleported = false,
+  /** False for a caller who may record their own movement but not otherwise
+   *  reshape the map (a 'contributor'): the jump's system and connection are
+   *  still written, but the incidental layout edits — upgrading an unresolved
+   *  node in place, nudging a new node clear of its source — are skipped, since
+   *  the server would refuse them and the offline queue would retry a refusal. */
+  canEditLayout = true,
 ): string | null {
   const { map, addSystem, addConnection, updateConnection, updateSystem, snapToGrid } = useMapStore.getState();
 
@@ -164,7 +170,7 @@ export function applyJump(
   if (existing) {
     mapSystemId = existing.id;
     // Fill an unresolved node in with the real system's details.
-    if (existing.eveSystemId == null && system.eveSystemId != null) {
+    if (canEditLayout && existing.eveSystemId == null && system.eveSystemId != null) {
       updateSystem(existing.id, {
         eveSystemId: system.eveSystemId,
         systemClass: system.systemClass as SystemClass,
@@ -208,7 +214,7 @@ export function applyJump(
     // would let it overlap the source. Schedule a one-shot gap fix that runs
     // once the node has measured. Only relevant when placed relative to an
     // actual source node (not the center-of-mass fallback).
-    if (prevMapSystemId && map.systems.some((s) => s.id === prevMapSystemId)) {
+    if (canEditLayout && prevMapSystemId && map.systems.some((s) => s.id === prevMapSystemId)) {
       const fixY = position.y < source.y; // placed above the source
       const fixX = position.x < source.x; // placed left of the source
       if (fixY || fixX) registerPlacementFix(mapSystemId, prevMapSystemId, fixY, fixX);
@@ -280,10 +286,11 @@ export function applyTrackedJump(
   curr: JumpSystem,
   prev: JumpSystem | null,
   prevMapSystemId: string | null,
-  opts: { skipKspace: boolean; canAdd: boolean; teleported?: boolean },
+  opts: { skipKspace: boolean; canAdd: boolean; teleported?: boolean; canEditLayout?: boolean },
   onJump?: OnConnectionJump,
 ): { mapSystemId: string | null; anchor: string | null | 'keep' } {
   const tp = opts.teleported ?? false;
+  const layout = opts.canEditLayout ?? true;
   const skip = opts.skipKspace && opts.canAdd;
   const systems = () => useMapStore.getState().map.systems;
 
@@ -302,7 +309,7 @@ export function applyTrackedJump(
     if (fromJspace) {
       // First K-space of this excursion, entered from J-space: the J-space
       // departure is the live anchor, so connect straight from it.
-      const mapSystemId = applyJump(curr, prevMapSystemId, true, onJump, tp);
+      const mapSystemId = applyJump(curr, prevMapSystemId, true, onJump, tp, layout);
       return { mapSystemId, anchor: mapSystemId };
     }
     if (viaWormhole) {
@@ -314,8 +321,8 @@ export function applyTrackedJump(
       // departure, adding it if it was skipped, exactly like the K-space ->
       // J-space jump below.
       const prevOnMap = systems().find((s) => s.eveSystemId === prev!.eveSystemId)?.id ?? null;
-      const source = prevOnMap ?? applyJump(prev!, null, true, undefined, tp);
-      const mapSystemId = applyJump(curr, source, true, onJump, tp);
+      const source = prevOnMap ?? applyJump(prev!, null, true, undefined, tp, layout);
+      const mapSystemId = applyJump(curr, source, true, onJump, tp, layout);
       return { mapSystemId, anchor: mapSystemId };
     }
     return { mapSystemId: systems().find((s) => s.eveSystemId === curr.eveSystemId)?.id ?? null, anchor: 'keep' };
@@ -325,12 +332,12 @@ export function applyTrackedJump(
     // Arriving in J-space (or Pochven) from K-space: record the K-space system
     // we jumped from — retroactively if it was skipped — and link it to here.
     const prevOnMap = systems().find((s) => s.eveSystemId === prev.eveSystemId)?.id ?? null;
-    const source = prevOnMap ?? applyJump(prev, null, true, undefined, tp); // add the last K-space isolated
-    const mapSystemId = applyJump(curr, source, true, onJump, tp); // then connect it through
+    const source = prevOnMap ?? applyJump(prev, null, true, undefined, tp, layout); // add the last K-space isolated
+    const mapSystemId = applyJump(curr, source, true, onJump, tp, layout); // then connect it through
     return { mapSystemId, anchor: mapSystemId };
   }
 
-  const mapSystemId = applyJump(curr, prevMapSystemId, opts.canAdd, onJump, tp);
+  const mapSystemId = applyJump(curr, prevMapSystemId, opts.canAdd, onJump, tp, layout);
   return { mapSystemId, anchor: mapSystemId };
 }
 
@@ -352,6 +359,9 @@ export function useLocationTracking(enabled: boolean) {
   // isn't linked back to the previous character's as a bogus connection.
   const followedId = useMapStore((s) => s.routeOrigin?.charId ?? null) ?? user?.id ?? null;
   const canEdit  = useCanEdit();
+  // Wider than canEdit by exactly one role: a contributor may record their own
+  // jumps (the server proves them) but not otherwise touch the layout.
+  const canRecordMovement = useCanRecordMovement();
   const lastEveSystemId = useRef<number | null>(null);
   const lastMapSystemId = useRef<string | null>(null);
   const lastActiveMapId = useRef<string | null>(null);
@@ -493,10 +503,12 @@ export function useLocationTracking(enabled: boolean) {
       }
     }
 
-    // A locked map never grows from passive tracking, nor does one a readonly /
-    // no-topology user is viewing; track-jumps off opts out of auto-add too.
+    // A locked map never grows from passive tracking, nor does one a readonly
+    // user is viewing; track-jumps off opts out of auto-add too. A contributor
+    // IS admitted here — recording their own movement is the one way they may
+    // grow the map — but not to the incidental layout edits (canEditLayout).
     const trackJumps = useMapStore.getState().trackJumps;
-    const canAdd = trackJumps && !map.locked && canEdit;
+    const canAdd = trackJumps && !map.locked && canRecordMovement;
     // On a corp/alliance map the map-level policy overrides everyone's personal
     // setting; personal maps keep using the per-user setting.
     const skipKspace = (map.isCorpMap || map.isAllianceMap)
@@ -514,7 +526,8 @@ export function useLocationTracking(enabled: boolean) {
         })
       : undefined;
 
-    const { mapSystemId, anchor } = applyTrackedJump(curr, prev, prevMapSystemId, { skipKspace, canAdd, teleported }, onJump);
+    const { mapSystemId, anchor } = applyTrackedJump(
+      curr, prev, prevMapSystemId, { skipKspace, canAdd, teleported, canEditLayout: canEdit }, onJump);
     if (anchor !== 'keep') lastMapSystemId.current = anchor;
 
     if (mapSystemId === null) {
@@ -532,5 +545,5 @@ export function useLocationTracking(enabled: boolean) {
       lastSelectedEveId.current = system.eveSystemId;
       selectSystem(mapSystemId, { fromJump: true });
     }
-  }, [enabled, location, checkedAt, canEdit, followedId, clones]);
+  }, [enabled, location, checkedAt, canEdit, canRecordMovement, followedId, clones]);
 }
