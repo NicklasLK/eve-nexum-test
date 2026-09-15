@@ -12,6 +12,7 @@
 import { db } from '../db.js';
 import { esiFetch } from '../utils/esi.js';
 import { bridgeStateFromEsi, type EsiStructureState } from './bridgeState.js';
+import { syncBridgesToAllianceMaps } from './bridgeMapSync.js';
 import { decryptToken, encryptToken } from '../utils/tokenCrypto.js';
 import { createLogger } from '../utils/logger.js';
 import { ANSIBLEX_TYPE_ID, parseAnsiblexName } from './jumpBridgeNames.js';
@@ -185,6 +186,9 @@ export function syncStructureReaders(): Promise<ReaderSyncResult[]> {
       if (rowCount) log.info(`${rowCount} bridge(s) not reported this run`);
     }
     if (rows.length) log.info(`synced ${rows.length} reader(s): ${results.filter((r) => r.ok).length} ok, ${results.reduce((n, r) => n + (r.ok ? r.gates : 0), 0)} gates`);
+    // Redraw the gate network on the alliance maps from what this run found.
+    try { await syncBridgesToAllianceMaps(); }
+    catch (err) { log.error('map projection failed:', err); }
     return results;
   })().finally(() => { running = null; });
   return running;

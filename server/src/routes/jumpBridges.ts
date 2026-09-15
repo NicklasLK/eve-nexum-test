@@ -13,6 +13,7 @@ import { parseBridgeLine } from '../services/jumpBridgeNames.js';
 import { resolveSystem, resolveSystemNames } from '../services/fleetRouteGraph.js';
 import { syncStructureReaders } from '../services/structureReaderSync.js';
 import { bridgeUsability, type BridgeUsability } from '../services/bridgeState.js';
+import { projectBridgesSoon } from '../services/bridgeMapSync.js';
 
 const log = createLogger('jumpBridges');
 export const jumpBridgesRouter = Router();
@@ -97,6 +98,7 @@ jumpBridgesRouter.post('/', async (req, res) => {
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 120) : '';
   try {
     const status = await insertBridge(a.id, b.id, name, shared ? null : owner, req.session.userId!);
+    if (shared && status === 'added') projectBridgesSoon();
     return res.status(status === 'added' ? 201 : 200).json({ status, from: a, to: b });
   } catch (err) { log.error('insert failed:', err); return res.status(500).json({ error: 'Database query failed' }); }
 });
@@ -128,6 +130,7 @@ jumpBridgesRouter.post('/bulk', async (req, res) => {
       if (status === 'added') added++; else skipped++;
     }
   } catch (err) { log.error('bulk insert failed:', err); return res.status(500).json({ error: 'Database query failed' }); }
+  if (shared && added > 0) projectBridgesSoon();
   return res.json({ added, skipped, errors });
 });
 
@@ -149,6 +152,7 @@ jumpBridgesRouter.patch('/:id', async (req, res) => {
   if (body.active === true) sets.push('missed_syncs = 0');
   vals.push(id);
   await db.query(`UPDATE jump_bridges SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${vals.length}`, vals);
+  if (!personal) projectBridgesSoon();
   return res.json({ ok: true });
 });
 
@@ -162,6 +166,7 @@ jumpBridgesRouter.delete('/:id', async (req, res) => {
   const personal = rows[0].owner_id != null;
   if (personal ? rows[0].owner_id !== owner : !canManageShared(req.session.role)) return res.status(403).json({ error: 'Forbidden' });
   await db.query(`DELETE FROM jump_bridges WHERE id = $1`, [id]);
+  if (!personal) projectBridgesSoon();
   return res.json({ ok: true });
 });
 

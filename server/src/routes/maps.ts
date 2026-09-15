@@ -13,6 +13,7 @@ import { mapCapFor, countPersonalMaps, mapAllowanceFor } from '../services/mapAl
 import { resolveEntityNames } from '../services/entityNames.js';
 import { audit } from '../services/audit.js';
 import { publishToMap } from '../services/mapEvents.js';
+import { projectBridgesSoon } from '../services/bridgeMapSync.js';
 import { streamMapEvents } from '../services/mapStream.js';
 import { listVisibleMaps, loadFullMap, loadSystemSignatures, loadSystemAnomalies, loadSystemStructures, CONNECTION_COLS } from '../services/mapRead.js';
 import { connectionTypeError, connectionEndpointEveIds, systemEveIds } from '../services/connectionRules.js';
@@ -1406,6 +1407,8 @@ mapsRouter.post('/from-region', async (req, res) => {
 
     await client.query('COMMIT');
     res.status(201).json({ id: mapId, systems: sysRes.rows.length, connections: connPh.length });
+    // A new alliance map may already hold both ends of known bridges.
+    if (isAllianceMap) projectBridgesSoon();
   } catch (err) {
     await client.query('ROLLBACK');
     log.error('map from-region failed:', err);
@@ -1572,6 +1575,8 @@ mapsRouter.post('/:mapId/seed-region', async (req, res) => {
     // Bulk change — tell other viewers to re-fetch rather than streaming every
     // row. The initiator reloads itself, so its own echo is suppressed.
     publishToMap(mapId, { type: 'map.resync', actor: req.get('x-client-id') ?? null });
+    // The new systems may complete bridge pairs on an alliance map.
+    projectBridgesSoon();
     res.status(201).json({
       systems: fresh.length, connections: connPh.length,
       skipped: sysRes.rows.length - fresh.length, region: regionName,
@@ -2347,6 +2352,7 @@ mapsRouter.post('/:mapId/merge', async (req, res) => {
     // re-fetch rather than streaming hundreds of deltas. The initiator already
     // reloads in the merge modal, so it's echo-suppressed.
     publishToMap(destId, { type: 'map.resync', actor: req.get('x-client-id') ?? null });
+    projectBridgesSoon();
 
     res.json({
       added:   { systems: addedSystems, connections: addedConnections, signatures: addedSignatures, structures: addedStructures },
