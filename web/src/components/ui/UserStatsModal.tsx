@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { XIcon } from '../../icons';
-import { useStats, type StatPeriod, type SigBreakdown, type BucketUnit } from '../../hooks/useStats';
+import { useStats, creditsInPeriod, type StatPeriod, type SigBreakdown, type BucketUnit, type WhCredit } from '../../hooks/useStats';
 
 const SPARK_VB_W = 600;
 const SPARK_VB_H = 80;
@@ -130,7 +130,7 @@ const SIG_ROWS: { key: keyof SigBreakdown }[] = [
 interface Props { onClose: () => void; }
 
 export function UserStatsModal({ onClose }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [period, setPeriod] = useState<StatPeriod>('day');
   const { stats, loading, error } = useStats(true);
 
@@ -151,6 +151,19 @@ export function UserStatsModal({ onClose }: Props) {
     ore:      t('sigType.ore'),
     combat:   t('sigType.combat'),
     ghost:    t('sigType.ghost'),
+  };
+
+  // The holes behind the Wormholes card, cut to the selected period the same
+  // way the server cut the card (windows count back from generatedAt).
+  const credited = stats?.credits ? creditsInPeriod(stats, period) : null;
+  const fmtWhen  = (iso: string) => new Date(iso).toLocaleString(i18n.language, { dateStyle: 'medium', timeStyle: 'short' });
+  const sysLabel = (name: string | null, cls: string | null) => (
+    <>{name ?? '?'}{cls && <span className="stats-modal__credit-class">{cls}</span>}</>
+  );
+  const creditNote = (c: WhCredit): string => {
+    if (c.role === 'both') return t('stats.creditFull');
+    const name = c.partnerName ?? t('stats.anotherPilot');
+    return c.role === 'jumper' ? t('stats.creditHalfJumped', { name }) : t('stats.creditHalfTyped', { name });
   };
 
   return (
@@ -233,6 +246,48 @@ export function UserStatsModal({ onClose }: Props) {
                   })}
                 </tbody>
               </table>
+
+              {credited && (
+                <>
+                  <h3 className="stats-modal__section-title" title={t('stats.wormholesHint')}>
+                    {t('stats.creditedWormholes')} — {periodLabels[period]}
+                  </h3>
+                  {credited.rows.length === 0 ? (
+                    <div className="stats-modal__empty">{t('stats.noCredits')}</div>
+                  ) : (
+                    <div className="stats-modal__credits">
+                      <table className="stats-modal__table">
+                        <thead>
+                          <tr className="stats-modal__head-row">
+                            <th className="stats-modal__th">{t('stats.when')}</th>
+                            <th className="stats-modal__th">{t('stats.hole')}</th>
+                            <th className="stats-modal__th">{t('stats.connection')}</th>
+                            <th className="stats-modal__th stats-modal__th--count">{t('stats.credit')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {credited.rows.map((c) => (
+                            <tr key={c.connectionId} className="stats-modal__row" title={c.mapName ?? undefined}>
+                              <td className="stats-modal__credit-when">{fmtWhen(c.creditedAt)}</td>
+                              <td className="stats-modal__credit-hole">{c.whType}</td>
+                              <td className="stats-modal__credit-route">
+                                {sysLabel(c.fromSystem, c.fromClass)} → {sysLabel(c.toSystem, c.toClass)}
+                              </td>
+                              <td className="stats-modal__credit-share">
+                                {c.role === 'both' ? '1' : '½'}
+                                <span className="stats-modal__credit-note">{creditNote(c)}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {credited.incomplete && (
+                    <div className="stats-modal__note">{t('stats.creditsTruncated', { n: credited.listed })}</div>
+                  )}
+                </>
+              )}
             </>
           )}
         </div>

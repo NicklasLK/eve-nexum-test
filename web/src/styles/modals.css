@@ -5,6 +5,88 @@
 /* ── User Stats Modal ────────────────────────────────────── */
 .stats-modal {
   width: min(720px, 94vw);
+  /* Header and period tabs stay put; the body scrolls when the credited
+     wormholes list makes the modal taller than the viewport. */
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.stats-modal .modal__header,
+.stats-modal__periods { flex-shrink: 0; }
+
+.stats-modal .modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Credited wormholes: its own scroll box, so a busy month doesn't push the
+   rest of the modal out of reach. */
+.stats-modal__credits {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.stats-modal__credits .stats-modal__table { border: none; }
+
+.stats-modal__credits .stats-modal__th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-base);
+}
+
+.stats-modal__credit-when {
+  font-size: calc(12px * var(--font-scale, 1));
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.stats-modal__credit-hole {
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 600;
+  color: var(--text-default);
+  white-space: nowrap;
+}
+
+.stats-modal__credit-route {
+  font-size: calc(13px * var(--font-scale, 1));
+  color: var(--text-secondary);
+}
+
+.stats-modal__credit-class {
+  font-size: calc(11px * var(--font-scale, 1));
+  color: var(--text-faintest);
+  margin-left: 4px;
+}
+
+.stats-modal__credit-share {
+  font-size: calc(14px * var(--font-scale, 1));
+  font-weight: 700;
+  color: var(--text-bright);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.stats-modal__credit-note {
+  display: block;
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.stats-modal__empty,
+.stats-modal__note {
+  font-size: calc(12px * var(--font-scale, 1));
+  color: var(--text-faintest);
+}
+
+.stats-modal__empty {
+  text-align: center;
+  padding: 10px 0;
 }
 
 .stats-modal__periods {

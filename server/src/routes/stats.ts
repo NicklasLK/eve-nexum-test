@@ -38,6 +38,19 @@ interface SeriesSpec { unit: BucketUnit; since: Date; count: number }
 // "forever" is a handful of months).
 const MAX_FOREVER_MONTHS = 120;
 
+// Most credited wormholes listed per pilot, newest first. The cards above the
+// list still count everything; the client says when the list stops short.
+const MAX_CREDITS = 500;
+
+interface CreditRow {
+  connectionId: string; creditedAt: Date; whType: string;
+  fromSystem: string | null; toSystem: string | null;
+  fromClass: string | null; toClass: string | null;
+  mapName: string | null;
+  jumperUserId: number | null; typerUserId: number | null;
+  jumperName: string | null; typerName: string | null;
+}
+
 function truncUTC(d: Date, unit: BucketUnit): Date {
   const x = new Date(d);
   x.setUTCMilliseconds(0); x.setUTCSeconds(0); x.setUTCMinutes(0);
@@ -115,7 +128,7 @@ router.get('/', async (req, res) => {
       forever: emptyPeriod(), year: emptyPeriod(), month: emptyPeriod(),
       week: emptyPeriod(), day: emptyPeriod(),
     };
-    return res.json({ ...empty, series: emptySeries() });
+    return res.json({ ...empty, series: emptySeries(), credits: [], creditsTruncated: false, generatedAt: new Date().toISOString() });
   }
 
   const now   = new Date();
@@ -138,7 +151,10 @@ router.get('/', async (req, res) => {
   // one role. Read from wh_credits, which outlives the holes themselves.
   const share = `CASE WHEN jumper_user_id = $1 AND typer_user_id = $1 THEN 1.0
                       WHEN jumper_user_id = $1 OR  typer_user_id = $1 THEN 0.5 ELSE 0 END`;
-  const [jumpRes, sigRes, minRes, whRes] = await Promise.all([
+  // The holes themselves, newest first, so the pilot can see what the figure is
+  // made of. System names come from the SDE; a hole whose ends were never
+  // resolved shows the raw system id rather than dropping out.
+  const [jumpRes, sigRes, minRes, whRes, creditRes] = await Promise.all([
     db.query<{ forever: string; year: string; month: string; week: string; day: string }>(
       `SELECT
          COUNT(*)::text                                  AS forever,
@@ -179,6 +195,25 @@ router.get('/', async (req, res) => {
        FROM wh_credits
        WHERE jumper_user_id = $1 OR typer_user_id = $1`,
       bucketParams,
+    ),
+    db.query<CreditRow>(
+      `SELECT c.connection_id AS "connectionId", c.credited_at AS "creditedAt", c.wh_type AS "whType",
+              COALESCE(sf.name, c.from_eve_system_id::text) AS "fromSystem",
+              COALESCE(st.name, c.to_eve_system_id::text)   AS "toSystem",
+              sf.class AS "fromClass", st.class AS "toClass",
+              m.name AS "mapName",
+              c.jumper_user_id AS "jumperUserId", c.typer_user_id AS "typerUserId",
+              uj.character_name AS "jumperName", ut.character_name AS "typerName"
+         FROM wh_credits c
+         LEFT JOIN maps          m  ON m.id  = c.map_id
+         LEFT JOIN solar_systems sf ON sf.id = c.from_eve_system_id
+         LEFT JOIN solar_systems st ON st.id = c.to_eve_system_id
+         LEFT JOIN users         uj ON uj.id = c.jumper_user_id
+         LEFT JOIN users         ut ON ut.id = c.typer_user_id
+        WHERE c.jumper_user_id = $1 OR c.typer_user_id = $1
+        ORDER BY c.credited_at DESC
+        LIMIT $2`,
+      [userId, MAX_CREDITS + 1],
     ),
   ]);
 
@@ -223,7 +258,22 @@ router.get('/', async (req, res) => {
   const series = {} as Record<PeriodKey, Series>;
   PERIODS.forEach((p, i) => { series[p] = { unit: specs[p].unit, values: seriesValues[i] }; });
 
-  res.json({ ...result, series });
+  // Each listed hole from this pilot's side: which half was theirs and who did
+  // the other, so the modal can explain a ½.
+  const creditsTruncated = creditRes.rows.length > MAX_CREDITS;
+  const credits = creditRes.rows.slice(0, MAX_CREDITS).map((r) => {
+    const jumped = r.jumperUserId === userId;
+    const typed  = r.typerUserId  === userId;
+    const role: 'both' | 'jumper' | 'typer' = jumped && typed ? 'both' : jumped ? 'jumper' : 'typer';
+    return {
+      connectionId: r.connectionId, creditedAt: r.creditedAt, whType: r.whType,
+      fromSystem: r.fromSystem, toSystem: r.toSystem, fromClass: r.fromClass, toClass: r.toClass,
+      mapName: r.mapName, role,
+      partnerName: role === 'both' ? null : role === 'jumper' ? r.typerName : r.jumperName,
+    };
+  });
+
+  res.json({ ...result, series, credits, creditsTruncated, generatedAt: now.toISOString() });
 });
 
 export default router;
