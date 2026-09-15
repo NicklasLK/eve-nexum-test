@@ -1173,6 +1173,16 @@ export async function migrate() {
       created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    -- A reader enrolled from Admin › Users: the character holds the
+    -- 'structures' extra and their own login token carries the scopes, so no
+    -- separate authorisation is needed. refresh_token is '' for these rows —
+    -- the token comes from the users row (utils/eveToken.ts). Kept in step by
+    -- the sync: unticking the extra, or blocking the user, drops the reader.
+    ALTER TABLE structure_readers ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+    ALTER TABLE structure_readers ALTER COLUMN refresh_token SET DEFAULT '';
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_structure_readers_user
+      ON structure_readers (user_id) WHERE user_id IS NOT NULL;
+
     -- ── ISK for extra maps (config.iskMaps, services/iskDonations.ts) ─────────
     -- The operator token that reads the donation corp's wallet journal.
     --

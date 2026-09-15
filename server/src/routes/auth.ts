@@ -133,6 +133,8 @@ async function completeElevateAuth(code: string, req: Request, res: Response): P
   );
   // The new token may unlock the structure sync and standings right away.
   void syncCorpStructures(req.session.userId!, { force: true }).catch(() => undefined);
+  // The structures extra also makes this character a jump-bridge reader.
+  if (granted.includes('esi-corporations.read_structures.v1')) void syncStructureReaders().catch(() => undefined);
   void refreshStandingsForUser({
     userId: req.session.userId!, characterId, corpId: req.session.userCorpId ?? null,
     allianceId: req.session.userAllianceId ?? null, accessToken: tokens.access_token,

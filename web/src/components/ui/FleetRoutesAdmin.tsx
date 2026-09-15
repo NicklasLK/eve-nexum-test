@@ -17,7 +17,7 @@ import styles from './AdminPage.module.css';
 // Station Manager / Director in the owning corp) or a pasted list; services are
 // standby titan / black ops / conduit pilots.
 
-interface Reader { characterId: number; characterName: string; corpId: number | null; corpName: string; role: string; gatesFound: number; lastSyncAt: string | null; lastError: string | null; addedBy: string | null }
+interface Reader { characterId: number; characterName: string; corpId: number | null; corpName: string; role: string; gatesFound: number; lastSyncAt: string | null; lastError: string | null; addedBy: string | null; viaUsers: boolean }
 type BridgeUsability = 'online' | 'reinforced' | 'offline' | 'missing' | 'inactive';
 interface Bridge { id: number; fromSystemId: number; fromName: string | null; toSystemId: number; toName: string | null; name: string; ownerCorpId: number | null; ownerCorpName: string | null; source: 'esi' | 'manual'; active: boolean; missedSyncs: number; lastSeenAt: string | null; addedBy: string | null; personal: boolean; esiState: string | null; stateTimerEnd: string | null; fuelExpiresAt: string | null; serviceOnline: boolean | null; usability: BridgeUsability }
 interface BridgesResp { shared: Bridge[]; personal: Bridge[]; canManageShared: boolean; drawnLinks: number }
@@ -124,7 +124,11 @@ export function JumpBridgesTab() {
                       : <span className={styles.mPill}>{t('fleetRoutes.admin.statusPending')}</span>}
                   {r.lastError && <div style={{ fontSize: 11, color: 'var(--danger-soft)', maxWidth: 260 }}>{r.lastError}</div>}
                 </td>
-                <td className={styles.mActions}><button type="button" className={`${styles.mAction} ${styles.mDanger}`} onClick={() => disconnect(r)}>{t('fleetRoutes.admin.disconnect')}</button></td>
+                <td className={styles.mActions}>
+                  {r.viaUsers
+                    ? <span style={{ fontSize: 11, color: 'var(--text-subtle)', whiteSpace: 'nowrap' }} title={t('fleetRoutes.admin.viaUsersHint')}>{t('fleetRoutes.admin.viaUsers')}</span>
+                    : <button type="button" className={`${styles.mAction} ${styles.mDanger}`} onClick={() => disconnect(r)}>{t('fleetRoutes.admin.disconnect')}</button>}
+                </td>
               </tr>
             ))}
           </tbody>

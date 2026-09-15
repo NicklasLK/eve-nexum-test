@@ -11,6 +11,7 @@
 // authoritative source.
 import { db } from '../db.js';
 import { esiFetch } from '../utils/esi.js';
+import { getValidToken } from '../utils/eveToken.js';
 import { bridgeStateFromEsi, type EsiStructureState } from './bridgeState.js';
 import { syncBridgesToAllianceMaps } from './bridgeMapSync.js';
 import { decryptToken, encryptToken } from '../utils/tokenCrypto.js';
@@ -28,10 +29,16 @@ const FIRST_RUN_DELAY_MS = 30 * 1000;
 export interface ReaderRow {
   character_id: number; character_name: string; corp_id: number | null; corp_name: string;
   refresh_token: string; role: string; gates_found: number; last_sync_at: string | null; last_error: string | null;
+  user_id: number | null;
 }
 
 /** EVE rotates refresh tokens on use; persist the new one before anything else. */
 async function readerAccessToken(row: ReaderRow): Promise<string> {
+  // Enrolled from Admin › Users: the character's own login token.
+  if (row.user_id != null) {
+    try { return await getValidToken(row.user_id); }
+    catch { throw new Error('token refresh failed — ask them to log in again'); }
+  }
   const res = await fetch(EVE_TOKEN_URL, {
     method: 'POST',
     headers: {
@@ -65,6 +72,8 @@ async function syncReader(row: ReaderRow, runStartedAt: Date): Promise<ReaderSyn
   let token: string;
   try { token = await readerAccessToken(row); }
   catch (err) { return fail(err instanceof Error ? err.message : 'token refresh failed'); }
+  // What fixes a missing scope depends on how the reader was connected.
+  const reconnect = row.user_id != null ? 'ask them to press Grant extra access again' : 'reconnect this reader';
   const auth = { headers: { Authorization: `Bearer ${token}` } };
 
   // The character's current corp (they may have moved since connecting).
@@ -73,7 +82,7 @@ async function syncReader(row: ReaderRow, runStartedAt: Date): Promise<ReaderSyn
   const corpId = ((await charRes.json()) as { corporation_id: number }).corporation_id;
 
   const rolesRes = await esiFetch(`${ESI}/characters/${row.character_id}/roles/`, auth);
-  if (rolesRes.status === 401 || rolesRes.status === 403) return fail('roles scope missing — reconnect this reader');
+  if (rolesRes.status === 401 || rolesRes.status === 403) return fail(`roles scope missing — ${reconnect}`);
   if (!rolesRes.ok) return fail(`roles lookup failed (${rolesRes.status})`);
   const roles = ((await rolesRes.json()) as { roles?: string[] }).roles ?? [];
   const role = STRUCTURE_ROLES.find((r) => roles.includes(r)) ?? '';
@@ -83,7 +92,7 @@ async function syncReader(row: ReaderRow, runStartedAt: Date): Promise<ReaderSyn
   let page = 1, pages = 1;
   do {
     const res = await esiFetch(`${ESI}/corporations/${corpId}/structures/?page=${page}`, auth);
-    if (res.status === 401 || res.status === 403) return fail('read_structures scope missing — reconnect this reader');
+    if (res.status === 401 || res.status === 403) return fail(`read_structures scope missing — ${reconnect}`);
     if (!res.ok) return fail(`corp structures page ${page} failed (${res.status})`);
     pages = parseInt(res.headers.get('x-pages') ?? '1', 10) || 1;
     all.push(...(await res.json() as CorpStructure[]));
@@ -146,6 +155,32 @@ async function syncReader(row: ReaderRow, runStartedAt: Date): Promise<ReaderSyn
   return { ...base, ok: true, gates: upserted, corpId };
 }
 
+// Readers enrolled from Admin › Users: every unblocked character that holds
+// the 'structures' extra and whose current token carries it. Re-derived on
+// every run, so unticking the extra (or blocking the user) drops the reader.
+// A character the admin also connected the dedicated way keeps that row.
+async function enrolUserReaders(): Promise<void> {
+  const qualifies = `NOT u.blocked AND 'structures' = ANY(u.extra_scopes)
+                     AND u.granted_scopes LIKE '%esi-corporations.read_structures.v1%'`;
+  await db.query(
+    `DELETE FROM structure_readers r
+      WHERE r.user_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = r.user_id AND ${qualifies})`,
+  );
+  await db.query(
+    `INSERT INTO structure_readers (character_id, character_name, corp_id, refresh_token, scopes, user_id)
+     SELECT u.character_id, u.character_name, u.corp_id, '', u.granted_scopes, u.id
+       FROM users u
+      WHERE ${qualifies} AND u.refresh_token IS NOT NULL
+     ON CONFLICT (character_id) DO NOTHING`,
+  );
+  await db.query(
+    `UPDATE structure_readers r
+        SET character_name = u.character_name, corp_id = COALESCE(r.corp_id, u.corp_id), scopes = u.granted_scopes
+       FROM users u WHERE u.id = r.user_id`,
+  );
+}
+
 let running: Promise<ReaderSyncResult[]> | null = null;
 
 /** Sync every reader. Concurrent calls share one run. */
@@ -153,13 +188,21 @@ export function syncStructureReaders(): Promise<ReaderSyncResult[]> {
   if (running) return running;
   running = (async () => {
     const runStartedAt = new Date();
+    await enrolUserReaders();
+    // Dedicated readers first, so a user-reader for a corp they already cover is skipped.
     const { rows } = await db.query<ReaderRow>(
-      `SELECT character_id, character_name, corp_id, corp_name, refresh_token, role, gates_found, last_sync_at, last_error
-         FROM structure_readers ORDER BY created_at`,
+      `SELECT character_id, character_name, corp_id, corp_name, refresh_token, role, gates_found, last_sync_at, last_error, user_id
+         FROM structure_readers ORDER BY (user_id IS NOT NULL), created_at`,
     );
     const results: ReaderSyncResult[] = [];
     const fullyReadCorps = new Set<number>();
     for (const row of rows) {
+      if (row.user_id != null && row.corp_id != null && fullyReadCorps.has(row.corp_id)) {
+        // Another reader already read this corp's structures this run.
+        await db.query(`UPDATE structure_readers SET last_sync_at = $1, last_error = NULL WHERE character_id = $2`, [runStartedAt, row.character_id]);
+        results.push({ characterId: row.character_id, characterName: row.character_name, ok: true, gates: 0 });
+        continue;
+      }
       try {
         const r = await syncReader(row, runStartedAt);
         results.push(r);

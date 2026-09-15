@@ -206,6 +206,7 @@ jumpBridgesRouter.get('/readers', requireAdmin, async (_req, res) => {
     `SELECT r.character_id AS "characterId", r.character_name AS "characterName", r.corp_id AS "corpId",
             r.corp_name AS "corpName", r.role, r.gates_found AS "gatesFound", r.last_sync_at AS "lastSyncAt",
             r.last_error AS "lastError", u.character_name AS "addedBy", r.created_at AS "createdAt"
+            , (r.user_id IS NOT NULL) AS "viaUsers"
        FROM structure_readers r LEFT JOIN users u ON u.id = r.added_by
       ORDER BY r.created_at`,
   );
@@ -225,7 +226,10 @@ jumpBridgesRouter.post('/readers/sync', requireAdmin, async (_req, res) => {
 jumpBridgesRouter.delete('/readers/:characterId', requireAdmin, async (req, res) => {
   const id = Number(req.params.characterId);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad id' });
-  const { rowCount } = await db.query(`DELETE FROM structure_readers WHERE character_id = $1`, [id]);
-  if (!rowCount) return res.status(404).json({ error: 'Not found' });
+  const { rows } = await db.query<{ user_id: number | null }>(`SELECT user_id FROM structure_readers WHERE character_id = $1`, [id]);
+  if (!rows.length) return res.status(404).json({ error: 'Not found' });
+  // Enrolled from Admin › Users: the extra there is the switch, not this button.
+  if (rows[0].user_id != null) return res.status(409).json({ error: 'Untick Corp structures for this character in Admin › Users instead' });
+  await db.query(`DELETE FROM structure_readers WHERE character_id = $1`, [id]);
   return res.json({ ok: true });
 });
