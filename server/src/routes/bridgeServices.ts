@@ -1,4 +1,4 @@
-// Standby capital bridge services (titan / black ops / carrier conduit) for
+// Standby capital bridge services (titan / black ops / carrier or command carrier conduit) for
 // the fleet route planner. Shared rows are managed by full users and admins;
 // anyone can keep personal ones.
 import { Router } from 'express';
@@ -6,15 +6,15 @@ import { db } from '../db.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { resolveOwnerId } from '../utils/owner.js';
 import { createLogger } from '../utils/logger.js';
-import { resolveSystem, SERVICE_DEFAULT_RANGE } from '../services/fleetRouteGraph.js';
+import { resolveSystem, SERVICE_DEFAULT_RANGE, SERVICE_KINDS, type ServiceKind } from '../services/fleetRouteGraph.js';
 import { canManageShared } from './jumpBridges.js';
 
 const log = createLogger('bridgeServices');
 export const bridgeServicesRouter = Router();
 bridgeServicesRouter.use(requireAuth);
 
-const KINDS = new Set(['titan', 'blops', 'conduit']);
-type Kind = 'titan' | 'blops' | 'conduit';
+const KINDS = new Set<string>(SERVICE_KINDS);
+type Kind = ServiceKind;
 
 interface ServiceRow {
   id: number; systemId: number; systemName: string | null; security: string | null; regionName: string | null;
@@ -63,7 +63,7 @@ bridgeServicesRouter.post('/', async (req, res) => {
   const shared = body.scope !== 'personal';
   if (shared && !canManageShared(req.session.role)) return res.status(403).json({ error: 'Only full users and admins edit shared services' });
   const kind = String(body.kind ?? '');
-  if (!KINDS.has(kind)) return res.status(400).json({ error: 'kind must be titan, blops or conduit' });
+  if (!KINDS.has(kind)) return res.status(400).json({ error: 'kind must be titan, blops, conduit or command' });
   const system = await resolveSystem(body.system ?? body.systemId);
   if (!system) return res.status(400).json({ error: 'Unknown system' });
   const { rows: sec } = await db.query<{ security: string }>(`SELECT security::text AS security FROM solar_systems WHERE id = $1`, [system.id]);

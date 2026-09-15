@@ -19,17 +19,21 @@ import { truesecColor } from '../../utils/truesec';
 // itself become waypoints). Options persist per user under nexum.fleetRoutes.*.
 
 type Level = 0 | 1 | 2;
-type Method = 'stargate' | 'jump_bridge' | 'wormhole' | 'titan_bridge' | 'blops_bridge' | 'carrier_conduit';
+type Method = 'stargate' | 'jump_bridge' | 'wormhole' | 'titan_bridge' | 'blops_bridge' | 'carrier_conduit' | 'command_conduit';
+// bridge_services.kind; 'command' is a command carrier's conduit (7.5 ly).
+type Kind = 'titan' | 'blops' | 'conduit' | 'command';
+const KINDS: Kind[] = ['titan', 'blops', 'conduit', 'command'];
+const KIND_METHOD: Record<Kind, Method> = { titan: 'titan_bridge', blops: 'blops_bridge', conduit: 'carrier_conduit', command: 'command_conduit' };
 type ShipClass = 'frigate' | 'destroyer' | 'cruiser' | 'battlecruiser' | 'battleship' | 'capital';
 interface Options {
   useStargates: boolean; useJumpBridges: boolean; useWormholes: boolean; includeThera: boolean; includeTurnur: boolean;
-  useTitanBridge: boolean; useBlopsBridge: boolean; useCarrierConduit: boolean;
+  useTitanBridge: boolean; useBlopsBridge: boolean; useCarrierConduit: boolean; useCommandConduit: boolean;
   avoidHighsec: Level; avoidLowsec: Level; avoidNullsec: Level; avoidWhSpace: Level;
   minBridgeRange: number; maxBridges: number;
 }
 const DEFAULT_OPTIONS: Options = {
   useStargates: true, useJumpBridges: true, useWormholes: true, includeThera: true, includeTurnur: true,
-  useTitanBridge: false, useBlopsBridge: false, useCarrierConduit: false,
+  useTitanBridge: false, useBlopsBridge: false, useCarrierConduit: false, useCommandConduit: false,
   avoidHighsec: 0, avoidLowsec: 0, avoidNullsec: 0, avoidWhSpace: 0,
   minBridgeRange: 3, maxBridges: 2,
 };
@@ -60,10 +64,10 @@ interface PlanResp {
 }
 type Picked = PickedSystem;
 
-const CAPITAL = new Set<Method>(['titan_bridge', 'blops_bridge', 'carrier_conduit']);
+const CAPITAL = new Set<Method>(['titan_bridge', 'blops_bridge', 'carrier_conduit', 'command_conduit']);
 const METHOD_COLOR: Record<Method, string> = {
   stargate: '#56b4e9', jump_bridge: 'var(--accent)', wormhole: '#b06ad0',
-  titan_bridge: '#f5b96a', blops_bridge: '#4db8c4', carrier_conduit: '#7ab4f0',
+  titan_bridge: '#f5b96a', blops_bridge: '#4db8c4', carrier_conduit: '#7ab4f0', command_conduit: '#b48cf5',
 };
 
 export function FleetRoutesModal({ onClose }: { onClose: () => void }) {
@@ -149,6 +153,7 @@ export function FleetRoutesModal({ onClose }: { onClose: () => void }) {
               <Check label={t('fleetRoutes.titanBridge')} hint="6 ly" checked={opts.useTitanBridge} onChange={(v) => set('useTitanBridge', v)} />
               <Check label={t('fleetRoutes.blopsBridge')} hint="8 ly" checked={opts.useBlopsBridge} onChange={(v) => set('useBlopsBridge', v)} />
               <Check label={t('fleetRoutes.carrierConduit')} hint="7 ly" checked={opts.useCarrierConduit} onChange={(v) => set('useCarrierConduit', v)} />
+              <Check label={t('fleetRoutes.commandConduit')} hint="7.5 ly" checked={opts.useCommandConduit} onChange={(v) => set('useCommandConduit', v)} />
             </Section>
 
             <Section title={t('fleetRoutes.security')}>
@@ -246,7 +251,7 @@ function RouteCard({ route, selected, shipClass, onSelect, onSend, sending }: {
   const tight = route.segments.filter((s) => s.method === 'wormhole' && s.maxJumpMassKg).sort((a, b) => (a.maxJumpMassKg ?? 0) - (b.maxJumpMassKg ?? 0))[0];
   const cap = tight?.capacity?.[shipClass];
   const catLabel = (c: string) => t(`fleetRoutes.cat.${c}`, { defaultValue: c });
-  const catClass = (c: string) => (c === 'gates_only' ? 'ok' : c === 'via_jb' ? 'jb' : c.endsWith('bridge') || c === 'carrier_conduit' ? 'cap' : 'wh');
+  const catClass = (c: string) => (c === 'gates_only' ? 'ok' : c === 'via_jb' ? 'jb' : c.endsWith('bridge') || c.endsWith('conduit') ? 'cap' : 'wh');
   const TAG: Record<string, { color: string; border: string }> = {
     ok: { color: 'var(--success-bright)', border: '#1e3a28' }, jb: { color: 'var(--accent)', border: 'var(--border-accent)' },
     cap: { color: '#f5b96a', border: '#5a4020' }, wh: { color: '#b06ad0', border: '#4a2e7a' },
@@ -307,6 +312,7 @@ function hopLabel(t: TFunction, s: Segment): string {
     case 'titan_bridge':    return `${t('fleetRoutes.hop.titan')} ${s.distanceLy?.toFixed(1)} ly`;
     case 'blops_bridge':    return `${t('fleetRoutes.hop.blops')} ${s.distanceLy?.toFixed(1)} ly`;
     case 'carrier_conduit': return `${t('fleetRoutes.hop.conduit')} ${s.distanceLy?.toFixed(1)} ly`;
+    case 'command_conduit': return `${t('fleetRoutes.hop.command')} ${s.distanceLy?.toFixed(1)} ly`;
     default: return '';
   }
 }
@@ -399,7 +405,7 @@ function RouteString({ route, shipClass }: { route: Route; shipClass: ShipClass 
         {legend(METHOD_COLOR.stargate, false, t('fleetRoutes.legend.stargate'))}
         {used.has('jump_bridge') && legend('#5a9af8', true, t('fleetRoutes.legend.bridge'))}
         {used.has('wormhole') && legend(METHOD_COLOR.wormhole, true, t('fleetRoutes.legend.wormhole'))}
-        {(used.has('titan_bridge') || used.has('blops_bridge') || used.has('carrier_conduit')) && legend(METHOD_COLOR.titan_bridge, true, t('fleetRoutes.legend.capital'))}
+        {(used.has('titan_bridge') || used.has('blops_bridge') || used.has('carrier_conduit') || used.has('command_conduit')) && legend(METHOD_COLOR.titan_bridge, true, t('fleetRoutes.legend.capital'))}
         <span>{t('fleetRoutes.hover.hint')}</span>
       </div>
       {hover && createPortal(<HoverCard hover={hover} shipClass={shipClass} />, document.body)}
@@ -414,6 +420,7 @@ function linkLabel(seg: Segment): string {
     case 'titan_bridge':    return `T ${seg.distanceLy?.toFixed(1)}ly`;
     case 'blops_bridge':    return `B ${seg.distanceLy?.toFixed(1)}ly`;
     case 'carrier_conduit': return `C ${seg.distanceLy?.toFixed(1)}ly`;
+    case 'command_conduit': return `CC ${seg.distanceLy?.toFixed(1)}ly`;
     default: return '';
   }
 }
@@ -443,6 +450,7 @@ function HoverCard({ hover, shipClass }: { hover: Hover; shipClass: ShipClass })
       case 'titan_bridge': title = t('fleetRoutes.kind.titan'); break;
       case 'blops_bridge': title = t('fleetRoutes.kind.blops'); break;
       case 'carrier_conduit': title = t('fleetRoutes.kind.conduit'); break;
+      case 'command_conduit': title = t('fleetRoutes.kind.command'); break;
     }
     rows.push(row(t('fleetRoutes.hover.hop'), `${from} → ${to}`));
     if (seg.name) rows.push(row(t('fleetRoutes.hover.name'), seg.name));
@@ -476,7 +484,7 @@ function HoverCard({ hover, shipClass }: { hover: Hover; shipClass: ShipClass })
 // ── My bridges & exclusions ──────────────────────────────────────────────────
 
 interface Bridge { id: number; fromSystemId: number; fromName: string | null; toSystemId: number; toName: string | null; name: string; source: string; active: boolean; missedSyncs: number; personal: boolean; ownerCorpName?: string | null }
-interface Service { id: number; systemId: number; systemName: string | null; kind: 'titan' | 'blops' | 'conduit'; rangeLy: number; name: string; active: boolean; personal: boolean }
+interface Service { id: number; systemId: number; systemName: string | null; kind: Kind; rangeLy: number; name: string; active: boolean; personal: boolean }
 interface BridgesResp { shared: Bridge[]; personal: Bridge[]; excludedBridges: number[]; excludedServices: number[]; canManageShared: boolean }
 interface ServicesResp { shared: Service[]; personal: Service[]; defaults: Record<string, number> }
 
@@ -487,7 +495,7 @@ function MyBridgesDrawer({ onChanged }: { onChanged: () => void }) {
   const [exB, setExB] = useState<Set<number>>(new Set());
   const [exS, setExS] = useState<Set<number>>(new Set());
   const [bFrom, setBFrom] = useState(''); const [bTo, setBTo] = useState('');
-  const [sSys, setSSys] = useState<PickedSystem>(null); const [sKind, setSKind] = useState<'titan' | 'blops' | 'conduit'>('titan'); const [sName, setSName] = useState('');
+  const [sSys, setSSys] = useState<PickedSystem>(null); const [sKind, setSKind] = useState<Kind>('titan'); const [sName, setSName] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
@@ -566,7 +574,7 @@ function MyBridgesDrawer({ onChanged }: { onChanged: () => void }) {
                 <label key={s.id} style={{ ...rowStyle, opacity: s.active ? 1 : 0.5 }}>
                   <input type="checkbox" checked={!exS.has(s.id)} onChange={() => toggleS(s.id)} />
                   <span>{s.systemName}</span>
-                  <span style={{ color: METHOD_COLOR[s.kind === 'titan' ? 'titan_bridge' : s.kind === 'blops' ? 'blops_bridge' : 'carrier_conduit'] }}>{kindLabel(s.kind)} · {s.rangeLy} ly</span>
+                  <span style={{ color: METHOD_COLOR[KIND_METHOD[s.kind]] }}>{kindLabel(s.kind)} · {s.rangeLy} ly</span>
                   {s.name && <span style={{ color: 'var(--text-faint)' }}>{s.name}</span>}
                 </label>
               ))}
@@ -581,7 +589,7 @@ function MyBridgesDrawer({ onChanged }: { onChanged: () => void }) {
           ))}
           <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 120px' }}><SystemSearchField value={sSys} onPick={setSSys} filter={lowNullFilter} placeholder={t('fleetRoutes.systemLowNull')} compact /></div>
-            <Select value={sKind} onChange={setSKind} ariaLabel={t('fleetRoutes.serviceKind')} options={(['titan', 'blops', 'conduit'] as const).map((k) => ({ value: k, label: kindLabel(k) }))} />
+            <Select value={sKind} onChange={setSKind} ariaLabel={t('fleetRoutes.serviceKind')} options={KINDS.map((k) => ({ value: k, label: kindLabel(k) }))} />
             <input className="chains-new__name" style={{ flex: '1 1 90px' }} placeholder={t('fleetRoutes.notes')} value={sName} onChange={(e) => setSName(e.target.value)} />
             <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={addService}>{t('actions.add', { defaultValue: 'Add' })}</button>
           </div>

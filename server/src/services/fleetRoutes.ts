@@ -1,7 +1,7 @@
 // Fleet route planner — a forbid-last-special-edge diversity search over the
 // stargate graph plus every shortcut a fleet can take: Ansiblex jump bridges,
 // mapped wormholes, Thera/Turnur scout holes, and capital bridges (titan /
-// black ops / carrier conduit) from a standby system.
+// black ops / carrier or command carrier conduit) from a standby system.
 //
 // Ported from the standalone route finder (app/services/pathfinder.py). This
 // module is PURE — no DB, no ESI — so it can be unit-tested on hand-built
@@ -19,7 +19,8 @@
 
 export type FleetMethod =
   | 'stargate' | 'jump_bridge' | 'wormhole'
-  | 'titan_bridge' | 'blops_bridge' | 'carrier_conduit';
+  | 'titan_bridge' | 'blops_bridge' | 'carrier_conduit' | 'command_conduit';
+export type CapitalMethod = 'titan_bridge' | 'blops_bridge' | 'carrier_conduit' | 'command_conduit';
 export type MassStatus = 'stable' | 'reduced' | 'critical';
 export type TimeStatus = 'stable' | 'eol';
 export type SecurityLevel = 0 | 1 | 2;   // 0 = permit, 1 = avoid (penalise), 2 = exclude
@@ -53,20 +54,22 @@ export const SIZE_MASS: Record<string, { jump: number; stable: number }> = {
 export const AVOID_PENALTY = 100;
 export const LY_METRES = 9.4607304725808e15;
 
-export const CAPITAL_METHODS = new Set<FleetMethod>(['titan_bridge', 'blops_bridge', 'carrier_conduit']);
-export const CAPITAL_RANGE_LY: Record<'titan_bridge' | 'blops_bridge' | 'carrier_conduit', number> = {
+export const CAPITAL_METHODS = new Set<FleetMethod>(['titan_bridge', 'blops_bridge', 'carrier_conduit', 'command_conduit']);
+export const CAPITAL_RANGE_LY: Record<CapitalMethod, number> = {
   titan_bridge:    6,
   blops_bridge:    8,
   carrier_conduit: 7,
+  // A command carrier's conduit reaches half a light-year further than a carrier's.
+  command_conduit: 7.5,
 };
 // Jump fatigue: black ops bridges apply half the fatigue of a titan/conduit.
 const FATIGUE_MULTIPLIER: Partial<Record<FleetMethod, number>> = {
-  titan_bridge: 1.0, carrier_conduit: 1.0, blops_bridge: 0.5,
+  titan_bridge: 1.0, carrier_conduit: 1.0, command_conduit: 1.0, blops_bridge: 0.5,
 };
 // Tie-break when several edges join the same pair: never silently upgrade a
 // gate hop into a bridge during segment reconstruction.
 const METHOD_PRIORITY: Record<FleetMethod, number> = {
-  stargate: 0, jump_bridge: 1, wormhole: 2, carrier_conduit: 3, blops_bridge: 4, titan_bridge: 5,
+  stargate: 0, jump_bridge: 1, wormhole: 2, carrier_conduit: 3, command_conduit: 4, blops_bridge: 5, titan_bridge: 6,
 };
 
 export const THERA_ID  = 31000005;
@@ -111,6 +114,7 @@ export interface FleetRouteOptions {
   useTitanBridge:    boolean;
   useBlopsBridge:    boolean;
   useCarrierConduit: boolean;
+  useCommandConduit: boolean;
   avoidHighsec:      SecurityLevel;
   avoidLowsec:       SecurityLevel;
   avoidNullsec:      SecurityLevel;
@@ -125,7 +129,7 @@ export function defaultFleetOptions(): FleetRouteOptions {
   return {
     useStargates: true, useJumpBridges: true, useWormholes: false,
     includeThera: true, includeTurnur: true,
-    useTitanBridge: false, useBlopsBridge: false, useCarrierConduit: false,
+    useTitanBridge: false, useBlopsBridge: false, useCarrierConduit: false, useCommandConduit: false,
     avoidHighsec: 0, avoidLowsec: 0, avoidNullsec: 0, avoidWhSpace: 0,
     minBridgeRange: 3, maxBridges: 2,
     theraId: THERA_ID, turnurId: TURNUR_ID,
@@ -197,6 +201,7 @@ function methodEnabled(method: FleetMethod, o: FleetRouteOptions): boolean {
     case 'titan_bridge':    return o.useTitanBridge;
     case 'blops_bridge':    return o.useBlopsBridge;
     case 'carrier_conduit': return o.useCarrierConduit;
+    case 'command_conduit': return o.useCommandConduit;
   }
 }
 
@@ -337,7 +342,7 @@ function specialEdgesInPath(g: FleetGraph, path: number[], o: FleetRouteOptions)
 }
 
 function withoutCapitals(o: FleetRouteOptions): FleetRouteOptions {
-  return { ...o, useTitanBridge: false, useBlopsBridge: false, useCarrierConduit: false };
+  return { ...o, useTitanBridge: false, useBlopsBridge: false, useCarrierConduit: false, useCommandConduit: false };
 }
 function gatesOnly(o: FleetRouteOptions): FleetRouteOptions {
   return { ...withoutCapitals(o), useJumpBridges: false, useWormholes: false };
@@ -388,7 +393,7 @@ function findDiversePaths(
 
   // With capital bridges on, the forbid-last-edge loop mostly yields capital
   // variants; explore the subcap world separately so WH / bridge routes show.
-  if (o.useTitanBridge || o.useBlopsBridge || o.useCarrierConduit) {
+  if (o.useTitanBridge || o.useBlopsBridge || o.useCarrierConduit || o.useCommandConduit) {
     for (const r of findDiversePaths(g, origin, destination, withoutCapitals(o), maxPaths)) {
       const k = r.path.join(',');
       if (!seen.has(k)) { seen.add(k); results.push(r); }
@@ -444,6 +449,7 @@ export function categorise(segments: FleetSegment[], o: FleetRouteOptions): stri
   if (methods.has('titan_bridge'))    cats.push('titan_bridge');
   if (methods.has('blops_bridge'))    cats.push('blops_bridge');
   if (methods.has('carrier_conduit')) cats.push('carrier_conduit');
+  if (methods.has('command_conduit')) cats.push('command_conduit');
   if (!hasJb && !hasWh && !hasCapital) cats.push('gates_only');
   return cats;
 }

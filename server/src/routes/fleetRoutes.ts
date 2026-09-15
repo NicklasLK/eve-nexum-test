@@ -39,6 +39,7 @@ export function parseFleetOptions(raw: unknown): FleetRouteOptions {
     useTitanBridge:    bool(o.useTitanBridge, d.useTitanBridge),
     useBlopsBridge:    bool(o.useBlopsBridge, d.useBlopsBridge),
     useCarrierConduit: bool(o.useCarrierConduit, d.useCarrierConduit),
+    useCommandConduit: bool(o.useCommandConduit, d.useCommandConduit),
     avoidHighsec:      level(o.avoidHighsec, d.avoidHighsec),
     avoidLowsec:       level(o.avoidLowsec, d.avoidLowsec),
     avoidNullsec:      level(o.avoidNullsec, d.avoidNullsec),
@@ -77,7 +78,7 @@ router.post('/', async (req, res) => {
       turnur: options.useWormholes && options.includeTurnur,
       wormholes: options.useWormholes,
       jumpBridges: options.useJumpBridges,
-      titan: options.useTitanBridge, blops: options.useBlopsBridge, conduit: options.useCarrierConduit,
+      titan: options.useTitanBridge, blops: options.useBlopsBridge, conduit: options.useCarrierConduit, command: options.useCommandConduit,
       mapIds, ownerId, expiredScout,
     });
     const routes = calculateRoutes(graph, from.id, to.id, options, maxRoutes).map((r) => routeToJson(r, graph));

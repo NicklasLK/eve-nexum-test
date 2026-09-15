@@ -15,7 +15,7 @@ import styles from './AdminPage.module.css';
 // Admin › Jump bridges and Admin › Bridge services: the shared data the fleet
 // route planner draws on. Gates arrive from structure readers (an alt with
 // Station Manager / Director in the owning corp) or a pasted list; services are
-// standby titan / black ops / conduit pilots.
+// standby titan / black ops / carrier or command carrier conduit pilots.
 
 interface Reader { characterId: number; characterName: string; corpId: number | null; corpName: string; role: string; gatesFound: number; lastSyncAt: string | null; lastError: string | null; addedBy: string | null; viaUsers: boolean }
 type BridgeUsability = 'online' | 'reinforced' | 'offline' | 'missing' | 'inactive' | 'corp_off';
@@ -290,12 +290,15 @@ function PasteModal({ onClose, onDone }: { onClose: () => void; onDone: () => vo
 
 // ── Bridge services ──────────────────────────────────────────────────────────
 
-type Kind = 'titan' | 'blops' | 'conduit';
+// bridge_services.kind; 'command' is a command carrier's conduit (7.5 ly).
+type Kind = 'titan' | 'blops' | 'conduit' | 'command';
+const KINDS: Kind[] = ['titan', 'blops', 'conduit', 'command'];
 interface Service { id: number; systemId: number; systemName: string | null; security: number | null; regionName: string | null; kind: Kind; rangeLy: number; name: string; active: boolean; addedBy: string | null; personal: boolean }
 interface ServicesResp { shared: Service[]; personal: Service[]; defaults: Record<Kind, number> }
 
 const KIND_COLOR: Record<Kind, { color: string; border: string }> = {
   titan: { color: '#f5b96a', border: '#5a4020' }, blops: { color: '#4db8c4', border: '#1e4a50' }, conduit: { color: 'var(--accent-light)', border: 'var(--border-accent)' },
+  command: { color: '#b48cf5', border: '#3e2f66' },
 };
 
 export function BridgeServicesTab() {
@@ -328,7 +331,7 @@ export function BridgeServicesTab() {
     await load();
   };
   const kindLabel = (k: Kind) => t(`fleetRoutes.kind.${k}`);
-  const defaults = data?.defaults ?? { titan: 6, blops: 8, conduit: 7 };
+  const defaults = data?.defaults ?? { titan: 6, blops: 8, conduit: 7, command: 7.5 };
 
   return (
     <>
@@ -343,7 +346,7 @@ export function BridgeServicesTab() {
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--text-subtle)' }}>
           {t('fleetRoutes.admin.service')}
           <Select value={kind} onChange={setKind} ariaLabel={t('fleetRoutes.admin.service')}
-            options={(['titan', 'blops', 'conduit'] as Kind[]).map((k) => ({ value: k, label: `${kindLabel(k)} · ${defaults[k]} ly` }))} />
+            options={KINDS.map((k) => ({ value: k, label: `${kindLabel(k)} · ${defaults[k]} ly` }))} />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 160, fontSize: 12, color: 'var(--text-subtle)' }}>
           {t('fleetRoutes.admin.notes')}

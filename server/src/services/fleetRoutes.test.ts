@@ -2,7 +2,7 @@
 // hand-built graphs so the engine is exercised without a database.
 import { describe, it, expect } from 'vitest';
 import {
-  AVOID_PENALTY, LY_METRES, THERA_ID, TURNUR_ID,
+  AVOID_PENALTY, CAPITAL_RANGE_LY, LY_METRES, THERA_ID, TURNUR_ID,
   addGate, addSpecial, addSystem, calculateRoutes, categorise, defaultFleetOptions,
   dijkstra, emptyFleetGraph, estimateFatigue, extractWaypoints, gateDistance, routeToJson,
   type FleetEdge, type FleetGraph, type FleetRouteOptions, type FleetSegment,
@@ -245,9 +245,26 @@ describe('categorise and fatigue', () => {
     expect(categorise([seg(1, 2, 'wormhole')], o)).toContain('via_wh');
     const thera = categorise([seg(1, THERA_ID, 'wormhole'), seg(THERA_ID, 2, 'wormhole')], o);
     expect(thera).toContain('via_thera'); expect(thera).not.toContain('via_wh');
-    for (const m of ['titan_bridge', 'blops_bridge', 'carrier_conduit'] as const) {
+    for (const m of ['titan_bridge', 'blops_bridge', 'carrier_conduit', 'command_conduit'] as const) {
       expect(categorise([seg(1, 2, m)], o)).toContain(m);
     }
+  });
+  it('reaches half a light-year further from a command carrier than from a carrier', () => {
+    expect(CAPITAL_RANGE_LY.carrier_conduit).toBe(7);
+    expect(CAPITAL_RANGE_LY.command_conduit).toBe(7.5);
+  });
+  it('treats a command conduit as a capital hop only when its own switch is on', () => {
+    const g = emptyFleetGraph();
+    for (let i = 1; i <= 4; i++) addSystem(g, sys(i, `NS-${i}`, -0.5));
+    addGate(g, 1, 2); addGate(g, 2, 3); addGate(g, 3, 4);
+    addSpecial(g, 1, 4, { method: 'command_conduit', weight: 1, distanceLy: 7.4 });
+    // The carrier conduit switch does not cover a command carrier's conduit.
+    const gatesOnly = calculateRoutes(g, 1, 4, opts({ useCarrierConduit: true, minBridgeRange: 1 }), 5);
+    expect(gatesOnly.every((r) => r.segments.every((s) => s.method === 'stargate'))).toBe(true);
+    const on = opts({ useCommandConduit: true, minBridgeRange: 1 });
+    const withConduit = calculateRoutes(g, 1, 4, on, 5);
+    expect(withConduit[0].segments.map((s) => s.method)).toEqual(['command_conduit']);
+    expect(categorise(withConduit[0].segments, on)).toContain('command_conduit');
   });
   it('estimates fatigue with EVE’s formula', () => {
     expect(estimateFatigue([seg(1, 2, 'stargate'), seg(2, 3, 'stargate')])).toBe(0);

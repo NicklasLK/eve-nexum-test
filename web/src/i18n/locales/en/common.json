@@ -916,6 +916,7 @@
     "titanBridge": "Titan bridge",
     "blopsBridge": "Black ops bridge",
     "carrierConduit": "Carrier conduit",
+    "commandConduit": "Command conduit",
     "security": "Security",
     "highsec": "High-sec",
     "lowsec": "Low-sec",
@@ -978,13 +979,15 @@
       "titan_bridge": "titan bridge",
       "blops_bridge": "black ops bridge",
       "carrier_conduit": "carrier conduit",
+      "command_conduit": "command conduit",
       "gates_only": "gates only"
     },
     "hop": {
       "bridge": "bridge",
       "titan": "titan",
       "blops": "blops",
-      "conduit": "conduit"
+      "conduit": "conduit",
+      "command": "command conduit"
     },
     "legend": {
       "stargate": "stargate",
@@ -1022,7 +1025,8 @@
     "kind": {
       "titan": "Titan bridge",
       "blops": "Black ops bridge",
-      "conduit": "Carrier conduit"
+      "conduit": "Carrier conduit",
+      "command": "Command conduit"
     },
     "saveFailed": "Could not save.",
     "unknownSystem": "Unknown system name.",
@@ -1113,7 +1117,7 @@
       "lineErrors_one": "{{count}} line could not be read:",
       "lineErrors_other": "{{count}} lines could not be read:",
       "servicesTitle": "Bridge services",
-      "servicesIntro": "Systems where the alliance keeps a titan, black ops or conduit pilot on standby. The planner may bridge a fleet from here to any low or null system within range; it never bridges into or out of high-sec, and assumes a cyno can be lit at the far end.",
+      "servicesIntro": "Systems where the alliance keeps a titan, black ops, carrier or command carrier pilot on standby. The planner may bridge a fleet from here to any low or null system within range; it never bridges into or out of high-sec, and assumes a cyno can be lit at the far end.",
       "system": "System",
       "service": "Service",
       "range": "Range (ly)",

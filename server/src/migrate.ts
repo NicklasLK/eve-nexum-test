@@ -1195,9 +1195,15 @@ export async function migrate() {
       added_by    INTEGER     REFERENCES users(id) ON DELETE SET NULL,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      CHECK (kind IN ('titan', 'blops', 'conduit'))
+      CHECK (kind IN ('titan', 'blops', 'conduit', 'command'))
     );
     CREATE INDEX IF NOT EXISTS idx_bridge_services_owner ON bridge_services (owner_id);
+    -- 'command' (a command carrier's conduit, 7.5 ly) came after the table
+    -- shipped; databases created before it still carry the three-kind CHECK
+    -- under Postgres's default name, so re-create it with the full list.
+    ALTER TABLE bridge_services DROP CONSTRAINT IF EXISTS bridge_services_kind_check;
+    ALTER TABLE bridge_services ADD CONSTRAINT bridge_services_kind_check
+      CHECK (kind IN ('titan', 'blops', 'conduit', 'command'));
 
     -- Per-account "hide this shared bridge/service from MY plans".
     CREATE TABLE IF NOT EXISTS bridge_exclusions (

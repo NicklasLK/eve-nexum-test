@@ -23,6 +23,7 @@ export interface FleetGraphSources {
   titan:       boolean;
   blops:       boolean;
   conduit:     boolean;
+  command:     boolean;
   /** Maps whose wormhole chains / drawn gates may be used. Caller authorises. */
   mapIds:      string[];
   /** Account whose personal bridges/services and exclusions apply (null = shared only). */
@@ -39,11 +40,17 @@ export interface FleetGraphSummary {
   capitalEdges: number;
 }
 
-export const SERVICE_METHOD: Record<'titan' | 'blops' | 'conduit', FleetMethod> = {
-  titan: 'titan_bridge', blops: 'blops_bridge', conduit: 'carrier_conduit',
+/** bridge_services.kind: what stands by in the system. 'command' is a command carrier's conduit. */
+export type ServiceKind = 'titan' | 'blops' | 'conduit' | 'command';
+export const SERVICE_KINDS: ServiceKind[] = ['titan', 'blops', 'conduit', 'command'];
+export const SERVICE_METHOD: Record<ServiceKind, FleetMethod> = {
+  titan: 'titan_bridge', blops: 'blops_bridge', conduit: 'carrier_conduit', command: 'command_conduit',
 };
-export const SERVICE_DEFAULT_RANGE: Record<'titan' | 'blops' | 'conduit', number> = {
-  titan: CAPITAL_RANGE_LY.titan_bridge, blops: CAPITAL_RANGE_LY.blops_bridge, conduit: CAPITAL_RANGE_LY.carrier_conduit,
+export const SERVICE_DEFAULT_RANGE: Record<ServiceKind, number> = {
+  titan:   CAPITAL_RANGE_LY.titan_bridge,
+  blops:   CAPITAL_RANGE_LY.blops_bridge,
+  conduit: CAPITAL_RANGE_LY.carrier_conduit,
+  command: CAPITAL_RANGE_LY.command_conduit,
 };
 
 // Thera/Turnur ids by name, cached for the process (both are ordinary
@@ -177,12 +184,13 @@ async function addJumpBridges(g: FleetGraph, mapIds: string[], ownerId: number |
 }
 
 async function addCapitalServices(g: FleetGraph, src: FleetGraphSources): Promise<{ services: number; edges: number }> {
-  const kinds: ('titan' | 'blops' | 'conduit')[] = [];
+  const kinds: ServiceKind[] = [];
   if (src.titan)   kinds.push('titan');
   if (src.blops)   kinds.push('blops');
   if (src.conduit) kinds.push('conduit');
+  if (src.command) kinds.push('command');
   if (!kinds.length) return { services: 0, edges: 0 };
-  const { rows } = await db.query<{ id: number; systemId: number; kind: 'titan' | 'blops' | 'conduit'; rangeLy: string | null; name: string }>(
+  const { rows } = await db.query<{ id: number; systemId: number; kind: ServiceKind; rangeLy: string | null; name: string }>(
     `SELECT id, system_id AS "systemId", kind, range_ly AS "rangeLy", name
        FROM bridge_services
       WHERE active AND kind = ANY($2::text[])
