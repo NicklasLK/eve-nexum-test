@@ -11,12 +11,15 @@ type SigType = typeof SIG_TYPES[number];
 interface PeriodStats {
   jumps: number;
   signatures: { total: number } & Record<SigType, number>;
+  /** Wormhole credits with halves: 1 per hole jumped and typed, 0.5 per role otherwise (wh_credits). */
+  wormholes: number;
 }
 
 function emptyPeriod(): PeriodStats {
   return {
     jumps: 0,
     signatures: { total: 0, data: 0, relic: 0, gas: 0, ore: 0, combat: 0, wormhole: 0, ghost: 0, unknown: 0 },
+    wormholes: 0,
   };
 }
 
@@ -131,7 +134,11 @@ router.get('/', async (req, res) => {
   // "last 24h".) The sig_type recorded is the type at scan time; rows logged
   // before the sig_type column carry NULL and bucket as 'unknown'.
   //   min — first signature event, so "all time" knows how many months to span.
-  const [jumpRes, sigRes, minRes] = await Promise.all([
+  // Wormhole credits: 1 for a hole this pilot both jumped and typed, 0.5 for
+  // one role. Read from wh_credits, which outlives the holes themselves.
+  const share = `CASE WHEN jumper_user_id = $1 AND typer_user_id = $1 THEN 1.0
+                      WHEN jumper_user_id = $1 OR  typer_user_id = $1 THEN 0.5 ELSE 0 END`;
+  const [jumpRes, sigRes, minRes, whRes] = await Promise.all([
     db.query<{ forever: string; year: string; month: string; week: string; day: string }>(
       `SELECT
          COUNT(*)::text                                  AS forever,
@@ -162,6 +169,17 @@ router.get('/', async (req, res) => {
         WHERE user_id = $1 AND event_type = 'signature'`,
       [userId],
     ),
+    db.query<{ forever: number | null; year: number | null; month: number | null; week: number | null; day: number | null }>(
+      `SELECT
+         SUM(${share})::float8                                    AS forever,
+         SUM(${share}) FILTER (WHERE credited_at >= $2)::float8 AS year,
+         SUM(${share}) FILTER (WHERE credited_at >= $3)::float8 AS month,
+         SUM(${share}) FILTER (WHERE credited_at >= $4)::float8 AS week,
+         SUM(${share}) FILTER (WHERE credited_at >= $5)::float8 AS day
+       FROM wh_credits
+       WHERE jumper_user_id = $1 OR typer_user_id = $1`,
+      bucketParams,
+    ),
   ]);
 
   const result: Record<PeriodKey, PeriodStats> = {
@@ -175,6 +193,10 @@ router.get('/', async (req, res) => {
   const j = jumpRes.rows[0];
   if (j) {
     for (const p of PERIODS) result[p].jumps = parseInt(j[p], 10);
+  }
+  const w = whRes.rows[0];
+  if (w) {
+    for (const p of PERIODS) result[p].wormholes = Number(w[p] ?? 0);
   }
 
   for (const row of sigRes.rows) {

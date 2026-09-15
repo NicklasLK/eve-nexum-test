@@ -20,6 +20,8 @@ export interface SigBreakdown {
 export interface PeriodStats {
   jumps:      number;
   signatures: SigBreakdown;
+  /** Wormhole credits with halves: 1 per hole you both jumped and typed, 0.5 per role otherwise. */
+  wormholes:  number;
 }
 
 /** Chart bucket granularity for a period's activity series. */

@@ -2073,6 +2073,8 @@
     "loading": "Loading…",
     "jumps": "Jumps",
     "signatures": "Signatures",
+    "wormholes": "Wormholes",
+    "wormholesHint": "Holes you jumped through and named: one each, or half when another pilot did the other part.",
     "activity": "Activity",
     "dailyActivity": "Daily activity — last 30 days",
     "byType": "Signatures by type",

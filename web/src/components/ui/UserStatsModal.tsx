@@ -189,6 +189,10 @@ export function UserStatsModal({ onClose }: Props) {
                   <span className="stats-modal__card-value">{current.signatures.total.toLocaleString()}</span>
                   <span className="stats-modal__card-label">{t('stats.signatures')}</span>
                 </div>
+                <div className="stats-modal__card" title={t('stats.wormholesHint')}>
+                  <span className="stats-modal__card-value">{Number.isInteger(current.wormholes) ? current.wormholes.toLocaleString() : current.wormholes.toFixed(1)}</span>
+                  <span className="stats-modal__card-label">{t('stats.wormholes')}</span>
+                </div>
               </div>
 
               {stats?.series[period] && stats.series[period].values.some((v) => v > 0) && (
