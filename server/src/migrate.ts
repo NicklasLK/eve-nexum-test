@@ -1127,6 +1127,18 @@ export async function migrate() {
     CREATE INDEX IF NOT EXISTS idx_map_connections_bridge
       ON map_connections (jump_bridge_id) WHERE jump_bridge_id IS NOT NULL;
 
+    -- One row per corp whose gates a structure reader has listed. enabled is
+    -- the per-corp switch on Admin › Jump bridges › Corporations: off takes
+    -- every bridge of that corp out of planning and off the alliance maps at
+    -- once, and a gate of that corp that arrives later stays off too — which a
+    -- bulk edit of the rows' own active flags could not guarantee.
+    CREATE TABLE IF NOT EXISTS bridge_corps (
+      corp_id    INTEGER     PRIMARY KEY,
+      corp_name  TEXT        NOT NULL DEFAULT '',
+      enabled    BOOLEAN     NOT NULL DEFAULT TRUE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     -- Standby capital bridge pilots: a titan / black ops / conduit ship parked
     -- in system_id that can bridge a fleet to any low/null system within range.
     -- Shared (owner_id NULL, full/admin managed) or personal, like bridges.

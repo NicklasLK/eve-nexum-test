@@ -1,5 +1,5 @@
 // One place for "can a fleet jump this Ansiblex right now", derived from the
-// bridge's row: the admin switch, how many syncs it has been missing from ESI,
+// bridge's row: the per-corp and per-bridge admin switches, how many syncs it has been missing from ESI,
 // and the live state the structure reader copies out of the corp structures
 // listing. A reinforced gate, or one whose service module is offline (out of
 // fuel, unfit), is still listed by ESI but nobody can jump it. Manual rows carry
@@ -13,6 +13,8 @@ export interface BridgeStateRow {
   missedSyncs:   number;
   esiState:      string | null;
   serviceOnline: boolean | null;
+  /** Per-corp switch (bridge_corps.enabled); absent = no corp, which counts as on. */
+  corpEnabled?:  boolean;
 }
 
 /** ESI structure states in which the gate cannot be jumped. */
@@ -51,10 +53,11 @@ export function bridgeStateFromEsi(s: EsiStructureState): BridgeStateCols {
   };
 }
 
-export type BridgeUsability = 'online' | 'reinforced' | 'offline' | 'missing' | 'inactive';
+export type BridgeUsability = 'online' | 'reinforced' | 'offline' | 'missing' | 'inactive' | 'corp_off';
 
 /** Why a bridge is or is not usable, most decisive reason first. */
 export function bridgeUsability(b: BridgeStateRow): BridgeUsability {
+  if (b.corpEnabled === false) return 'corp_off';
   if (!b.active) return 'inactive';
   if (b.missedSyncs >= 2) return 'missing';
   if (b.esiState != null && REINFORCED_STATES.includes(b.esiState)) return 'reinforced';
@@ -67,7 +70,8 @@ export function bridgeUsableSql(alias = ''): string {
   const p = alias ? `${alias}.` : '';
   const reinforced = REINFORCED_STATES.map((s) => `'${s}'`).join(', ');
   return `(${p}active AND ${p}missed_syncs < 2 AND COALESCE(${p}service_online, TRUE)`
-       + ` AND COALESCE(${p}esi_state, '') NOT IN (${reinforced}))`;
+       + ` AND COALESCE(${p}esi_state, '') NOT IN (${reinforced})`
+       + ` AND NOT EXISTS (SELECT 1 FROM bridge_corps bc WHERE bc.corp_id = ${p}owner_corp_id AND NOT bc.enabled))`;
 }
 
 /**
@@ -79,7 +83,7 @@ export type BridgeLinkState = 'absent' | 'broken' | 'ok';
 
 export function bridgeLinkState(b: BridgeStateRow): BridgeLinkState {
   const u = bridgeUsability(b);
-  if (u === 'inactive' || u === 'missing') return 'absent';
+  if (u === 'inactive' || u === 'missing' || u === 'corp_off') return 'absent';
   if (u !== 'online' || b.missedSyncs >= 1) return 'broken';
   return 'ok';
 }

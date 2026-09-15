@@ -53,6 +53,12 @@ describe('planBridgeLinks', () => {
     expect(planBridgeLinks([], systems, drawn).remove).toEqual(['l1']);
   });
 
+  it('removes the links of a corporation that is switched off and draws none for it', () => {
+    const drawn = [L('l1', 'A', 'B', { jumpBridgeId: 1 })];
+    expect(planBridgeLinks([B(1, 1, 2, { corpEnabled: false })], systems, drawn).remove).toEqual(['l1']);
+    expect(planBridgeLinks([B(1, 1, 2, { corpEnabled: false })], systems, []).insert).toEqual([]);
+  });
+
   it('never removes an untagged link', () => {
     const p = planBridgeLinks([], systems, [L('l1', 'A', 'B'), L('l2', 'A', 'C', { connectionType: 'standard' })]);
     expect(p.remove).toEqual([]);

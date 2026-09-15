@@ -31,6 +31,7 @@ interface BridgeRow {
   name: string; ownerCorpId: number | null; source: string; active: boolean; missedSyncs: number;
   lastSeenAt: string | null; addedBy: string | null; personal: boolean; createdAt: string;
   esiState: string | null; stateTimerEnd: string | null; fuelExpiresAt: string | null; serviceOnline: boolean | null;
+  corpEnabled: boolean;
 }
 
 const SELECT_BRIDGES = `
@@ -39,11 +40,13 @@ const SELECT_BRIDGES = `
          b.name, b.owner_corp_id AS "ownerCorpId", b.source, b.active, b.missed_syncs AS "missedSyncs",
          b.last_seen_at AS "lastSeenAt", u.character_name AS "addedBy",
          b.esi_state AS "esiState", b.state_timer_end AS "stateTimerEnd", b.fuel_expires_at AS "fuelExpiresAt", b.service_online AS "serviceOnline",
+         COALESCE(bc.enabled, TRUE) AS "corpEnabled",
          (b.owner_id IS NOT NULL) AS personal, b.created_at AS "createdAt"
     FROM jump_bridges b
     LEFT JOIN solar_systems sf ON sf.id = b.from_system_id
     LEFT JOIN solar_systems st ON st.id = b.to_system_id
-    LEFT JOIN users u ON u.id = b.added_by`;
+    LEFT JOIN users u ON u.id = b.added_by
+    LEFT JOIN bridge_corps bc ON bc.corp_id = b.owner_corp_id`;
 
 // GET /api/jump-bridges — shared + the caller's personal bridges + exclusions.
 jumpBridgesRouter.get('/', async (req, res) => {
@@ -55,23 +58,38 @@ jumpBridgesRouter.get('/', async (req, res) => {
     const { rows: ex } = await db.query<{ kind: string; targetId: number }>(
       `SELECT kind, target_id AS "targetId" FROM bridge_exclusions WHERE owner_id = $1`, [owner],
     );
-    const corpIds = [...new Set(rows.map((r) => r.ownerCorpId).filter((x): x is number => x != null))];
-    const corpNames = new Map<number, string>();
-    if (corpIds.length) {
+    // Corps: every bridge_corps row plus any corp only known from its bridges
+    // (read before bridge_corps existed). Names fall back to the corp's reader.
+    const { rows: corpRows } = await db.query<{ corpId: number; corpName: string; enabled: boolean }>(
+      `SELECT corp_id AS "corpId", corp_name AS "corpName", enabled FROM bridge_corps`);
+    const corpIds = [...new Set([...corpRows.map((c) => c.corpId), ...rows.map((r) => r.ownerCorpId).filter((x): x is number => x != null)])];
+    const corpNames = new Map<number, string>(corpRows.filter((c) => c.corpName).map((c) => [c.corpId, c.corpName]));
+    const unnamed = corpIds.filter((id) => !corpNames.has(id));
+    if (unnamed.length) {
       const { rows: cn } = await db.query<{ corpId: number; corpName: string }>(
-        `SELECT DISTINCT corp_id AS "corpId", corp_name AS "corpName" FROM structure_readers WHERE corp_id = ANY($1::int[])`, [corpIds]);
+        `SELECT DISTINCT corp_id AS "corpId", corp_name AS "corpName" FROM structure_readers WHERE corp_id = ANY($1::int[]) AND corp_name <> ''`, [unnamed]);
       cn.forEach((c) => corpNames.set(c.corpId, c.corpName));
     }
+    const corpOn = new Map(corpRows.map((c) => [c.corpId, c.enabled]));
     const withCorp = rows.map((r): BridgeRow & { ownerCorpName: string | null; usability: BridgeUsability } => ({
       ...r, ownerCorpName: r.ownerCorpId != null ? corpNames.get(r.ownerCorpId) ?? null : null, usability: bridgeUsability(r),
     }));
+    const sharedRows = withCorp.filter((r) => !r.personal);
+    const corps = corpIds.map((corpId) => {
+      const mine = sharedRows.filter((r) => r.ownerCorpId === corpId);
+      return {
+        corpId, corpName: corpNames.get(corpId) ?? '', enabled: corpOn.get(corpId) ?? true,
+        bridges: mine.length, usable: mine.filter((r) => r.usability === 'online').length,
+      };
+    }).sort((a, b) => a.corpName.localeCompare(b.corpName) || a.corpId - b.corpId);
     // How many of the shared bridges are currently drawn on the alliance maps.
     const { rows: drawn } = await db.query<{ n: string }>(
       `SELECT COUNT(*) AS n FROM map_connections c JOIN maps m ON m.id = c.map_id
         WHERE c.jump_bridge_id IS NOT NULL AND m.alliance_id IS NOT NULL`,
     );
     return res.json({
-      shared: withCorp.filter((r) => !r.personal),
+      shared: sharedRows,
+      corps,
       personal: withCorp.filter((r) => r.personal),
       excludedBridges: ex.filter((e) => e.kind === 'bridge').map((e) => e.targetId),
       excludedServices: ex.filter((e) => e.kind === 'service').map((e) => e.targetId),
@@ -196,6 +214,27 @@ jumpBridgesRouter.put('/exclusions', async (req, res) => {
     return res.status(500).json({ error: 'Database query failed' });
   } finally { client.release(); }
   return res.json({ ok: true, excludedBridges: bridges, excludedServices: services });
+});
+
+// PUT /api/jump-bridges/corps/:corpId { enabled } — the per-corp switch. A corp
+// only known from its bridges gets its bridge_corps row here, named from its
+// reader when we have one.
+jumpBridgesRouter.put('/corps/:corpId', async (req, res) => {
+  if (!canManageShared(req.session.role)) return res.status(403).json({ error: 'Only full users and admins edit shared bridges' });
+  const corpId = Number(req.params.corpId);
+  const enabled = ((req.body ?? {}) as Record<string, unknown>).enabled;
+  if (!Number.isInteger(corpId) || corpId <= 0 || typeof enabled !== 'boolean') return res.status(400).json({ error: 'corpId and enabled are required' });
+  try {
+    const { rows: cn } = await db.query<{ corpName: string }>(
+      `SELECT corp_name AS "corpName" FROM structure_readers WHERE corp_id = $1 AND corp_name <> '' LIMIT 1`, [corpId]);
+    await db.query(
+      `INSERT INTO bridge_corps (corp_id, corp_name, enabled) VALUES ($1, $2, $3)
+       ON CONFLICT (corp_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()`,
+      [corpId, cn[0]?.corpName ?? '', enabled],
+    );
+  } catch (err) { log.error('corp switch failed:', err); return res.status(500).json({ error: 'Database query failed' }); }
+  projectBridgesSoon();
+  return res.json({ ok: true, corpId, enabled });
 });
 
 // ── Structure readers (admin) ────────────────────────────────────────────────

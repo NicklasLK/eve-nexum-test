@@ -159,9 +159,12 @@ async function runOnce(): Promise<void> {
   const { rows: maps } = await db.query<MapRow>(`SELECT id, name FROM maps WHERE alliance_id IS NOT NULL`);
   if (!maps.length) return;
   const { rows: bridges } = await db.query<ProjBridge>(
-    `SELECT id, from_system_id AS "fromSystemId", to_system_id AS "toSystemId", active,
-            missed_syncs AS "missedSyncs", esi_state AS "esiState", service_online AS "serviceOnline"
-       FROM jump_bridges WHERE owner_id IS NULL`,
+    `SELECT b.id, b.from_system_id AS "fromSystemId", b.to_system_id AS "toSystemId", b.active,
+            b.missed_syncs AS "missedSyncs", b.esi_state AS "esiState", b.service_online AS "serviceOnline",
+            COALESCE(bc.enabled, TRUE) AS "corpEnabled"
+       FROM jump_bridges b
+       LEFT JOIN bridge_corps bc ON bc.corp_id = b.owner_corp_id
+      WHERE b.owner_id IS NULL`,
   );
   for (const map of maps) {
     try {

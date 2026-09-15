@@ -146,6 +146,13 @@ async function syncReader(row: ReaderRow, runStartedAt: Date): Promise<ReaderSyn
     const cr = await esiFetch(`${ESI}/corporations/${corpId}/`).catch(() => null);
     if (cr?.ok) corpName = ((await cr.json()) as { name?: string }).name ?? corpName;
   }
+  // The corp becomes switchable on Admin › Jump bridges › Corporations.
+  await db.query(
+    `INSERT INTO bridge_corps (corp_id, corp_name) VALUES ($1, $2)
+     ON CONFLICT (corp_id) DO UPDATE
+       SET corp_name = CASE WHEN EXCLUDED.corp_name <> '' THEN EXCLUDED.corp_name ELSE bridge_corps.corp_name END`,
+    [corpId, corpName ?? ''],
+  );
   await db.query(
     `UPDATE structure_readers
         SET corp_id = $1, corp_name = $2, role = $3, gates_found = $4, last_sync_at = $5, last_error = NULL

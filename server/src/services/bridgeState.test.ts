@@ -27,6 +27,7 @@ describe('bridgeStateFromEsi', () => {
 describe('bridgeUsability', () => {
   it('ranks the admin switch above ESI state', () => {
     expect(bridgeUsability({ ...base, active: false, esiState: 'armor_reinforce' })).toBe('inactive');
+    expect(bridgeUsability({ ...base, corpEnabled: false, active: false })).toBe('corp_off');
   });
   it('reports missing, reinforced and offline in that order', () => {
     expect(bridgeUsability({ ...base, missedSyncs: 2, esiState: 'hull_reinforce' })).toBe('missing');
@@ -40,6 +41,7 @@ describe('bridgeUsability', () => {
   it('has a matching SQL form', () => {
     expect(bridgeUsableSql('b')).toContain('b.active AND b.missed_syncs < 2');
     expect(bridgeUsableSql()).toContain("NOT IN ('armor_reinforce', 'hull_reinforce')");
+    expect(bridgeUsableSql('b')).toContain('bc.corp_id = b.owner_corp_id AND NOT bc.enabled');
   });
 });
 
@@ -47,6 +49,7 @@ describe('bridgeLinkState', () => {
   it('draws nothing for a switched-off or long-missing bridge', () => {
     expect(bridgeLinkState({ ...base, active: false })).toBe('absent');
     expect(bridgeLinkState({ ...base, missedSyncs: 2 })).toBe('absent');
+    expect(bridgeLinkState({ ...base, corpEnabled: false })).toBe('absent');
   });
   it('severs the link while reinforced, offline, or missed once', () => {
     expect(bridgeLinkState({ ...base, esiState: 'armor_reinforce' })).toBe('broken');

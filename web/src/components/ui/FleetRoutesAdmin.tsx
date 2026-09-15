@@ -18,9 +18,10 @@ import styles from './AdminPage.module.css';
 // standby titan / black ops / conduit pilots.
 
 interface Reader { characterId: number; characterName: string; corpId: number | null; corpName: string; role: string; gatesFound: number; lastSyncAt: string | null; lastError: string | null; addedBy: string | null; viaUsers: boolean }
-type BridgeUsability = 'online' | 'reinforced' | 'offline' | 'missing' | 'inactive';
-interface Bridge { id: number; fromSystemId: number; fromName: string | null; toSystemId: number; toName: string | null; name: string; ownerCorpId: number | null; ownerCorpName: string | null; source: 'esi' | 'manual'; active: boolean; missedSyncs: number; lastSeenAt: string | null; addedBy: string | null; personal: boolean; esiState: string | null; stateTimerEnd: string | null; fuelExpiresAt: string | null; serviceOnline: boolean | null; usability: BridgeUsability }
-interface BridgesResp { shared: Bridge[]; personal: Bridge[]; canManageShared: boolean; drawnLinks: number }
+type BridgeUsability = 'online' | 'reinforced' | 'offline' | 'missing' | 'inactive' | 'corp_off';
+interface Corp { corpId: number; corpName: string; enabled: boolean; bridges: number; usable: number }
+interface Bridge { id: number; fromSystemId: number; fromName: string | null; toSystemId: number; toName: string | null; name: string; ownerCorpId: number | null; ownerCorpName: string | null; source: 'esi' | 'manual'; active: boolean; missedSyncs: number; lastSeenAt: string | null; addedBy: string | null; personal: boolean; esiState: string | null; stateTimerEnd: string | null; fuelExpiresAt: string | null; serviceOnline: boolean | null; corpEnabled: boolean; usability: BridgeUsability }
+interface BridgesResp { shared: Bridge[]; personal: Bridge[]; corps: Corp[]; canManageShared: boolean; drawnLinks: number }
 interface BulkResult { added: number; skipped: number; errors: { line: number; text: string; reason: string }[] }
 
 const ROLE_LABEL: Record<string, string> = { Director: 'Director', Station_Manager: 'Station Manager' };
@@ -30,6 +31,7 @@ export function JumpBridgesTab() {
   const [readers, setReaders] = useState<Reader[] | null>(null);
   const [bridges, setBridges] = useState<Bridge[] | null>(null);
   const [drawn, setDrawn] = useState(0);
+  const [corps, setCorps] = useState<Corp[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
   const [syncing, setSyncing] = useState(false);
@@ -39,7 +41,7 @@ export function JumpBridgesTab() {
   const load = useCallback(async () => {
     try {
       const [r, b] = await Promise.all([api<{ readers: Reader[] }>('/api/jump-bridges/readers'), api<BridgesResp>('/api/jump-bridges')]);
-      setReaders(r.readers); setBridges(b.shared); setDrawn(b.drawnLinks); setError(null);
+      setReaders(r.readers); setBridges(b.shared); setCorps(b.corps); setDrawn(b.drawnLinks); setError(null);
     } catch { setError(t('fleetRoutes.admin.loadFailed')); }
   }, [t]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -75,6 +77,10 @@ export function JumpBridgesTab() {
   });
   const setActive = async (b: Bridge, active: boolean) => {
     await api(`/api/jump-bridges/${b.id}`, { method: 'PATCH', body: JSON.stringify({ active }) }).catch(() => toast.error(t('fleetRoutes.saveFailed')));
+    await load();
+  };
+  const setCorpEnabled = async (c: Corp, enabled: boolean) => {
+    await api(`/api/jump-bridges/corps/${c.corpId}`, { method: 'PUT', body: JSON.stringify({ enabled }) }).catch(() => toast.error(t('fleetRoutes.saveFailed')));
     await load();
   };
   const remove = (b: Bridge) => setConfirm({
@@ -135,6 +141,31 @@ export function JumpBridgesTab() {
         </table>
       )}
       <p className={styles.pgEmpty} style={{ textAlign: 'left', padding: '8px 0 16px' }}>{t('fleetRoutes.admin.readersHint')}</p>
+
+      <div className={styles.pgSectionBar}>
+        <h3 style={{ margin: 0, fontSize: 13 }}>{t('fleetRoutes.admin.corps')}</h3>
+      </div>
+      {bridges === null ? <div className={styles.pgLoading}>…</div> : corps.length === 0 ? (
+        <div className={styles.pgEmpty}>{t('fleetRoutes.admin.noCorps')}</div>
+      ) : (
+        <table className={styles.mTable}>
+          <thead><tr>
+            <th>{t('fleetRoutes.admin.colCorp')}</th><th>{t('fleetRoutes.admin.colBridges')}</th>
+            <th>{t('fleetRoutes.admin.colUsable')}</th><th>{t('fleetRoutes.admin.colEnabled')}</th>
+          </tr></thead>
+          <tbody>
+            {corps.map((c) => (
+              <tr key={c.corpId} style={{ opacity: c.enabled ? 1 : 0.6 }}>
+                <td>{c.corpName || c.corpId}</td>
+                <td className={styles.mNum}>{c.bridges}</td>
+                <td className={styles.mNum}>{c.usable}</td>
+                <td><input type="checkbox" checked={c.enabled} onChange={(e) => setCorpEnabled(c, e.target.checked)} aria-label={t('fleetRoutes.admin.colEnabled')} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <p className={styles.pgEmpty} style={{ textAlign: 'left', padding: '8px 0 16px' }}>{t('fleetRoutes.admin.corpsHint')}</p>
 
       <div className={styles.pgSectionBar}>
         <h3 style={{ margin: 0, fontSize: 13 }}>
@@ -204,6 +235,7 @@ function BridgeStatePill({ b }: { b: Bridge }) {
   const k = b.usability;
   if (k === 'online')   return <span className={`${styles.mPill} ${styles.mPillOk}`}>{t('fleetRoutes.admin.state.online')}</span>;
   if (k === 'inactive') return <span className={styles.mPill}>{t('fleetRoutes.admin.state.inactive')}</span>;
+  if (k === 'corp_off') return <span className={styles.mPill} title={t('fleetRoutes.admin.state.corp_offHint')}>{t('fleetRoutes.admin.state.corp_off')}</span>;
   const end = b.stateTimerEnd ? new Date(b.stateTimerEnd) : null;
   const timerLeft = msUntil(end);
   const label = k === 'reinforced' && timerLeft != null
