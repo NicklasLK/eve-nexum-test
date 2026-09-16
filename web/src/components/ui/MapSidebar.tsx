@@ -533,10 +533,13 @@ function LazyWhSweepToggle() {
         />
       </div>
       <div className="map-sidebar__hint">{t("mapSidebar.collapseGraceHint")}</div>
-      <div className="map-sidebar__row">
+      {/* Stacked, full-width: the option labels are sentences, and a trigger
+          hugging the sidebar's right edge would open its list off-screen. */}
+      <div className="map-sidebar__field">
         <label className="map-sidebar__label" htmlFor="collapse-action">{t("mapSidebar.collapseAction")}</label>
         <Select
           id="collapse-action"
+          className="map-sidebar__select--full"
           value={action}
           disabled={!enabled || saving}
           onChange={(v) => persist({ collapseAction: v as CollapseAction }, { collapseAction: action })}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export interface PopoverPos {
   left:       number;
@@ -34,6 +34,9 @@ export function usePopover() {
   // Recompute from the trigger's current viewport rect. Always open downward
   // (flipping up read as odd); cap the height to the room below so the dropdown
   // never runs off-screen — the list scrolls within whatever height is left.
+  // Horizontally it opens at the trigger's left edge but is pulled back inside
+  // the viewport when its own width would spill past the right edge — a trigger
+  // hugging the right-docked sidebar with sentence-long options did exactly that.
   const reposition = useCallback(() => {
     const rect = btnRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -47,7 +50,11 @@ export function usePopover() {
     const margin = 8;
     const top = rect.bottom + 2;
     const spaceBelow = Math.max(0, window.innerHeight - top - margin);
-    setPos({ left: rect.left, top, maxHeight: spaceBelow });
+    // Not mounted yet on the very first call (openAt runs before render); the
+    // layout effect below re-runs this once it is, before the frame paints.
+    const width = dropdownRef.current?.offsetWidth ?? 0;
+    const left = Math.max(margin, Math.min(rect.left, window.innerWidth - margin - width));
+    setPos({ left, top, maxHeight: spaceBelow });
   }, []);
 
   const openAt = useCallback(() => {
@@ -56,12 +63,17 @@ export function usePopover() {
     setOpen(true);
   }, [reposition]);
 
+  // Once the dropdown is in the DOM, clamp it before paint so it never flashes
+  // off-screen for a frame.
+  useLayoutEffect(() => {
+    if (open) reposition();
+  }, [open, reposition]);
+
   // While open, keep the dropdown glued to the trigger as the page (or any
   // scroll container) scrolls or the window resizes. Capture phase so scrolls
   // inside nested containers are caught too.
   useEffect(() => {
     if (!open) return;
-    reposition();
     const onMove = () => reposition();
     window.addEventListener('scroll', onMove, true);
     window.addEventListener('resize', onMove);
