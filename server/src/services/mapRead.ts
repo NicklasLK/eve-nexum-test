@@ -77,6 +77,7 @@ export async function listVisibleMaps(p: VisibleMapsParams) {
             m.allow_as_merge_destination  AS "allowAsMergeDestination",
             m.lazy_remove_wormholes       AS "lazyRemoveWormholes",
             m.collapse_grace_hours        AS "collapseGraceHours",
+            m.collapse_action             AS "collapseAction",
             m.last_active_at AS "lastActiveAt",
             m.created_at     AS "createdAt",
             m.updated_at     AS "updatedAt"
@@ -108,6 +109,7 @@ export async function loadFullMap(mapId: string) {
               lazy_remove_wormholes       AS "lazyRemoveWormholes",
               skip_kspace                 AS "skipKspace",
               collapse_grace_hours        AS "collapseGraceHours",
+              collapse_action             AS "collapseAction",
               bookmark_format             AS "bookmarkFormat",
               site_bookmark_format        AS "siteBookmarkFormat",
               share_token              AS "shareToken",

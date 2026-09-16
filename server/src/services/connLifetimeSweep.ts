@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { createLogger } from '../utils/logger.js';
 import { publishToMap } from './mapEvents.js';
 import { effectiveExpiryMs, lifeBucket, type TimeBucket } from '../data/whLifetimes.js';
+import { applyCollapseAction, parseCollapseAction, publishCollapse } from './deadConnections.js';
 
 const log = createLogger('connLifetimeSweep');
 
@@ -14,12 +15,14 @@ interface Row {
   eolAt:             Date | null;
   lifetimeExpiresAt: Date | null;
   createdAt:         Date;
+  broken:            boolean;
   sourceId:          string;
   targetId:          string;
   sourceSignatureId: string | null;
   targetSignatureId: string | null;
   lazyRemove:        boolean;
   graceHours:        number;
+  collapseAction:    string;
 }
 
 export type LifetimeAction =
@@ -32,36 +35,45 @@ export type LifetimeAction =
  * tested without a DB):
  *   - unknown lifetime → nothing;
  *   - expired for longer than the grace period on a lazy-removal map → collapse
- *     (sever + drop its backing sigs — a dead hole has no sig on the scanner);
+ *     (drop its backing sigs, then the map's collapse action — a dead hole has
+ *     no sig on the scanner);
+ *   - already broken → nothing else; its label is moot. It is only a candidate
+ *     at all so a map that removes dead holes can still take it once its own
+ *     life has run out (the sig sweep or orphan quarantine got there first);
  *   - otherwise re-bucket if the stored status has drifted from the live one.
  * Collapse takes priority over re-bucketing so an over-grace hole doesn't first
  * get stamped 'expired' only to be severed the same tick.
  */
 export function connLifetimeAction(
-  row: Pick<Row, 'timeStatus' | 'whType' | 'eolAt' | 'lifetimeExpiresAt' | 'createdAt' | 'lazyRemove'>,
+  row: Pick<Row, 'timeStatus' | 'whType' | 'eolAt' | 'lifetimeExpiresAt' | 'createdAt' | 'lazyRemove'> & { broken?: boolean },
   now: number,
   graceMs: number,
 ): LifetimeAction {
   const expiry = effectiveExpiryMs(row);
   if (expiry === null) return { kind: 'none' };
   if (row.lazyRemove && now - expiry > graceMs) return { kind: 'collapse' };
+  if (row.broken) return { kind: 'none' };
   const bucket = lifeBucket(expiry - now);
   return bucket === row.timeStatus ? { kind: 'none' } : { kind: 'rebucket', bucket };
 }
 
 /**
  * Collapse one map's over-grace connections in a transaction: delete the
- * wormhole sigs backing them, sever the connections (broken = true), then
- * broadcast so open clients drop the sigs and render the severed edge live.
+ * wormhole sigs backing them, apply the map's collapse action (mark broken /
+ * delete / delete + prune the cut-off branch), then broadcast so open clients
+ * drop the sigs and render the result live.
  */
 async function collapseMap(mapId: string, conns: Row[]): Promise<void> {
   const connIds = conns.map((c) => c.id);
   const sigIds = conns.flatMap((c) => [c.sourceSignatureId, c.targetSignatureId]).filter((x): x is string => !!x);
+  // One map, one setting: every row carries the same value.
+  const action = parseCollapseAction(conns[0]?.collapseAction);
   const client = await db.connect();
+  let result;
   try {
     await client.query('BEGIN');
     if (sigIds.length) await client.query(`DELETE FROM map_signatures WHERE id = ANY($1::uuid[])`, [sigIds]);
-    await client.query(`UPDATE map_connections SET broken = TRUE WHERE id = ANY($1::uuid[])`, [connIds]);
+    result = await applyCollapseAction(client, mapId, connIds, action);
     await client.query(`UPDATE maps SET updated_at = NOW() WHERE id = $1`, [mapId]);
     await client.query('COMMIT');
   } catch (err) {
@@ -72,10 +84,14 @@ async function collapseMap(mapId: string, conns: Row[]): Promise<void> {
     client.release();
   }
 
-  const affectedSystems = new Set(conns.flatMap((c) => [c.sourceId, c.targetId]));
+  // A pruned system is gone — announcing its sigs changed would only make
+  // clients re-fetch something that no longer exists.
+  const removedSystems = new Set(result.removedSystemIds);
+  const affectedSystems = new Set(conns.flatMap((c) => [c.sourceId, c.targetId]).filter((id) => !removedSystems.has(id)));
   for (const systemId of affectedSystems) publishToMap(mapId, { type: 'sig.changed', actor: null, systemId });
-  for (const id of connIds) publishToMap(mapId, { type: 'connection.update', actor: null, id, updates: { broken: true } });
-  log.info(`map ${mapId}: collapsed ${connIds.length} expired connection(s), removed ${sigIds.length} sig(s)`);
+  publishCollapse(mapId, result);
+  log.info(`map ${mapId}: collapsed ${connIds.length} expired connection(s) [${action}], removed ${sigIds.length} sig(s)`
+    + (action === 'break' ? '' : `, deleted ${result.removedConnIds.length} connection(s), ${result.removedSystemIds.length} system(s)`));
 }
 
 /**
@@ -88,20 +104,23 @@ async function collapseMap(mapId: string, conns: Row[]): Promise<void> {
  * The prefilter keeps the candidate set to holes with a determinable lifetime
  * (a manual/legacy timestamp, or any typed hole — K162 decays against the 48h
  * ceiling). Untyped connections have no computable expiry and are skipped in JS.
+ * Broken holes are only fetched on maps whose collapse action deletes, so an
+ * already-quarantined hole is still removed once its own life runs out.
  */
-async function sweepConnLifetimes(): Promise<void> {
+export async function sweepConnLifetimes(): Promise<void> {
   let rows: Row[];
   try {
     const res = await db.query<Row>(
       `SELECT c.id, c.map_id AS "mapId", c.time_status AS "timeStatus", c.wh_type AS "whType",
               c.eol_at AS "eolAt", c.lifetime_expires_at AS "lifetimeExpiresAt", c.created_at AS "createdAt",
-              c.source_id AS "sourceId", c.target_id AS "targetId",
+              c.broken, c.source_id AS "sourceId", c.target_id AS "targetId",
               c.source_signature_id AS "sourceSignatureId", c.target_signature_id AS "targetSignatureId",
-              m.lazy_remove_wormholes AS "lazyRemove", m.collapse_grace_hours AS "graceHours"
+              m.lazy_remove_wormholes AS "lazyRemove", m.collapse_grace_hours AS "graceHours",
+              m.collapse_action AS "collapseAction"
          FROM map_connections c
          JOIN maps m ON m.id = c.map_id
         WHERE c.connection_type = 'standard'
-          AND c.broken = FALSE
+          AND (c.broken = FALSE OR (m.lazy_remove_wormholes = TRUE AND m.collapse_action <> 'break'))
           AND (c.lifetime_expires_at IS NOT NULL
             OR c.eol_at IS NOT NULL
             OR (c.wh_type IS NOT NULL AND c.wh_type <> ''))`,

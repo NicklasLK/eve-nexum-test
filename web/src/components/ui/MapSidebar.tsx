@@ -36,7 +36,7 @@ import { CustomIntelBlock } from "./CustomIntelBlock";
 import { PatchNotesModal } from "./PatchNotesModal";
 import { ContentFilterBlock } from "./ContentFilterBlock";
 import { useIsMapOwner } from "../../hooks/useIsMapOwner";
-import type { WormholeMap } from "../../types";
+import type { CollapseAction, WormholeMap } from "../../types";
 
 // Single labelled checkbox row backed by useUserSetting so the on/off
 // state syncs cross-device via users.ui_settings. Used by the Activity
@@ -466,24 +466,32 @@ const COLLAPSE_GRACE_OPTIONS: Array<{ h: number; label: (t: TFunction) => string
   { h: 4,    label: (t) => t("units.hours", { count: 4 }) },
 ];
 
+// What the expiry sweep does with a dead hole once the grace has run out.
+// 'break' is the old behaviour and the default; the other two delete.
+const COLLAPSE_ACTION_OPTIONS: Array<{ value: CollapseAction; label: (t: TFunction) => string }> = [
+  { value: "break",      label: (t) => t("mapSidebar.collapseActionBreak") },
+  { value: "disconnect", label: (t) => t("mapSidebar.collapseActionDisconnect") },
+  { value: "prune",      label: (t) => t("mapSidebar.collapseActionPrune") },
+];
+
+type SweepPatch = { lazyRemoveWormholes?: boolean; collapseGraceHours?: number; collapseAction?: CollapseAction };
+
 function LazyWhSweepToggle() {
   const { t } = useTranslation();
   const map = useMapStore((s) => s.map);
   const enabled = !!map.lazyRemoveWormholes;
   const grace = map.collapseGraceHours ?? 0.5;
+  const action: CollapseAction = map.collapseAction ?? "break";
   const [saving, setSaving] = useState(false);
 
-  function setInStore(patch: { lazyRemoveWormholes?: boolean; collapseGraceHours?: number }) {
+  function setInStore(patch: SweepPatch) {
     useMapStore.setState((s) => ({
       map: { ...s.map, ...patch },
       maps: s.maps.map((m) => (m.id === map.id ? { ...m, ...patch } : m)),
     }));
   }
 
-  async function persist(
-    patch: { lazyRemoveWormholes?: boolean; collapseGraceHours?: number },
-    revert: { lazyRemoveWormholes?: boolean; collapseGraceHours?: number },
-  ) {
+  async function persist(patch: SweepPatch, revert: SweepPatch) {
     setSaving(true);
     setInStore(patch);
     try {
@@ -525,6 +533,17 @@ function LazyWhSweepToggle() {
         />
       </div>
       <div className="map-sidebar__hint">{t("mapSidebar.collapseGraceHint")}</div>
+      <div className="map-sidebar__row">
+        <label className="map-sidebar__label" htmlFor="collapse-action">{t("mapSidebar.collapseAction")}</label>
+        <Select
+          id="collapse-action"
+          value={action}
+          disabled={!enabled || saving}
+          onChange={(v) => persist({ collapseAction: v as CollapseAction }, { collapseAction: action })}
+          options={COLLAPSE_ACTION_OPTIONS.map((o) => ({ value: o.value, label: o.label(t) }))}
+        />
+      </div>
+      <div className="map-sidebar__hint">{t("mapSidebar.collapseActionHint")}</div>
     </>
   );
 }

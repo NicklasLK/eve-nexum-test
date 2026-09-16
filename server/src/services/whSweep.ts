@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { createLogger } from '../utils/logger.js';
 import { publishToMap } from './mapEvents.js';
 import { whLifetimeHours } from '../data/whLifetimes.js';
+import { applyCollapseAction, parseCollapseAction, publishCollapse, type CollapseResult } from './deadConnections.js';
 
 const log = createLogger('whSweep');
 
@@ -12,13 +13,14 @@ const log = createLogger('whSweep');
 const MIN_LIFETIME_HOURS = 4.5;
 
 interface CandidateRow {
-  id:         string;
-  systemId:   string;
-  mapId:      string;
-  whType:     string;
-  whLeadsTo:  string;
-  createdAt:  Date;
-  graceHours: number;
+  id:             string;
+  systemId:       string;
+  mapId:          string;
+  whType:         string;
+  whLeadsTo:      string;
+  createdAt:      Date;
+  graceHours:     number;
+  collapseAction: string;
 }
 
 interface SysRow  { id: string; name: string; systemClass: string }
@@ -81,15 +83,20 @@ function wasBackedByDeleted(
 }
 
 /**
- * Process one map's expired sigs in a transaction: delete them, quarantine any
- * connection they backed that nothing else backs, then broadcast the changes
- * so open clients update live (sig.changed re-fetches the system's sig list;
- * connection.update flips `broken` on the edge).
+ * Process one map's expired sigs in a transaction: delete them, then apply the
+ * map's collapse action to any connection they backed that nothing else backs
+ * (quarantine by default; delete, or delete + prune the cut-off branch, where
+ * the map asks for it), then broadcast the changes so open clients update live
+ * (sig.changed re-fetches the system's sig list; connection.update flips
+ * `broken` on the edge; connection.remove / system.remove drop them).
  */
 async function sweepMap(mapId: string, expired: CandidateRow[]): Promise<void> {
   const expiredIds = expired.map((e) => e.id);
+  // One map, one setting: every candidate row carries the same value.
+  const action = parseCollapseAction(expired[0]?.collapseAction);
   const client = await db.connect();
-  let brokenIds: string[] = [];
+  let deadIds: string[] = [];
+  let result: CollapseResult = { brokenIds: [], removedConnIds: [], removedSystemIds: [] };
   try {
     await client.query('BEGIN');
 
@@ -118,15 +125,16 @@ async function sweepMap(mapId: string, expired: CandidateRow[]): Promise<void> {
       if (list) list.push(sig); else sigsBySystem.set(sig.systemId, [sig]);
     }
 
-    brokenIds = connRes.rows
-      .filter((c) => c.connectionType === 'standard' && !c.broken)
+    // An already-broken hole is left alone when the action is to break it (no-op)
+    // but is fair game for the deleting actions — its aged-out sig is the same
+    // max-life signal whichever heuristic quarantined it first.
+    deadIds = connRes.rows
+      .filter((c) => c.connectionType === 'standard' && (!c.broken || action !== 'break'))
       .filter((c) => wasBackedByDeleted(c, expired, systemsById))
       .filter((c) => !isBacked(c, sigsBySystem, systemsById))
       .map((c) => c.id);
 
-    if (brokenIds.length > 0) {
-      await client.query(`UPDATE map_connections SET broken = TRUE WHERE id = ANY($1::uuid[])`, [brokenIds]);
-    }
+    result = await applyCollapseAction(client, mapId, deadIds, action);
     await client.query(`UPDATE maps SET updated_at = NOW() WHERE id = $1`, [mapId]);
 
     await client.query('COMMIT');
@@ -139,15 +147,18 @@ async function sweepMap(mapId: string, expired: CandidateRow[]): Promise<void> {
   }
 
   // Broadcast outside the transaction. Server-originated → actor null so every
-  // connected client applies it (none will match their own CLIENT_ID).
-  const affectedSystems = new Set(expired.map((e) => e.systemId));
+  // connected client applies it (none will match their own CLIENT_ID). A pruned
+  // system is gone, so its sigs aren't announced as changed.
+  const removedSystems = new Set(result.removedSystemIds);
+  const affectedSystems = new Set(expired.map((e) => e.systemId).filter((id) => !removedSystems.has(id)));
   for (const systemId of affectedSystems) {
     publishToMap(mapId, { type: 'sig.changed', actor: null, systemId });
   }
-  for (const id of brokenIds) {
-    publishToMap(mapId, { type: 'connection.update', actor: null, id, updates: { broken: true } });
-  }
-  log.info(`map ${mapId}: removed ${expiredIds.length} aged WH sig(s), quarantined ${brokenIds.length} connection(s)`);
+  publishCollapse(mapId, result);
+  log.info(`map ${mapId}: removed ${expiredIds.length} aged WH sig(s), `
+    + (action === 'break'
+      ? `quarantined ${result.brokenIds.length} connection(s)`
+      : `deleted ${result.removedConnIds.length} connection(s) and ${result.removedSystemIds.length} system(s) [${action}]`));
 }
 
 /** One sweep pass over every opted-in map. */
@@ -165,7 +176,7 @@ export async function sweepAll(): Promise<void> {
     const res = await db.query<CandidateRow>(
       `SELECT s.id, s.system_id AS "systemId", sys.map_id AS "mapId",
               s.wh_type AS "whType", s.wh_leads_to AS "whLeadsTo", s.created_at AS "createdAt",
-              m.collapse_grace_hours AS "graceHours"
+              m.collapse_grace_hours AS "graceHours", m.collapse_action AS "collapseAction"
          FROM map_signatures s
          JOIN map_systems sys ON sys.id = s.system_id
          JOIN maps m ON m.id = sys.map_id

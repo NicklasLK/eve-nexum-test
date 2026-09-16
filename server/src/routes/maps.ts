@@ -13,6 +13,7 @@ import { mapCapFor, countPersonalMaps, mapAllowanceFor } from '../services/mapAl
 import { resolveEntityNames } from '../services/entityNames.js';
 import { audit } from '../services/audit.js';
 import { publishToMap } from '../services/mapEvents.js';
+import { COLLAPSE_ACTIONS, isCollapseAction, type CollapseAction } from '../services/deadConnections.js';
 import { projectBridgesSoon } from '../services/bridgeMapSync.js';
 import { streamMapEvents } from '../services/mapStream.js';
 import { listVisibleMaps, loadFullMap, loadSystemSignatures, loadSystemAnomalies, loadSystemStructures, CONNECTION_COLS } from '../services/mapRead.js';
@@ -2498,9 +2499,10 @@ mapsRouter.post('/:mapId/presence', async (req, res) => {
 // toggle merge-source eligibility (corp maps, full/admin only)
 mapsRouter.patch('/:mapId', async (req, res) => {
   const { mapId } = req.params;
-  const { name, locked, allowAsMergeSource, allowAsMergeDestination, lazyRemoveWormholes, collapseGraceHours, bookmarkFormat, siteBookmarkFormat, skipKspace } = req.body as {
+  const { name, locked, allowAsMergeSource, allowAsMergeDestination, lazyRemoveWormholes, collapseGraceHours, collapseAction, bookmarkFormat, siteBookmarkFormat, skipKspace } = req.body as {
     name?: string; locked?: boolean; allowAsMergeSource?: boolean; allowAsMergeDestination?: boolean;
-    lazyRemoveWormholes?: boolean; collapseGraceHours?: number; bookmarkFormat?: string | null; siteBookmarkFormat?: string | null; skipKspace?: boolean;
+    lazyRemoveWormholes?: boolean; collapseGraceHours?: number; collapseAction?: unknown;
+    bookmarkFormat?: string | null; siteBookmarkFormat?: string | null; skipKspace?: boolean;
   };
 
   const access = await requireMapWrite(res, mapId, req);
@@ -2589,6 +2591,17 @@ mapsRouter.patch('/:mapId', async (req, res) => {
     sets.push(`collapse_grace_hours = $${vals.length + 1}`); vals.push(n);
     normalizedGrace = n;
   }
+  // What the expiry sweeps do with a dead hole once the grace has run out. Same
+  // plain per-map gate as the toggle; the value is checked against the enum so a
+  // stray string can't escalate to deleting systems.
+  let normalizedAction: CollapseAction | undefined;
+  if (collapseAction !== undefined) {
+    if (!isCollapseAction(collapseAction)) {
+      res.status(400).json({ error: `collapseAction must be one of ${COLLAPSE_ACTIONS.join(', ')}` }); return;
+    }
+    sets.push(`collapse_action = $${vals.length + 1}`); vals.push(collapseAction);
+    normalizedAction = collapseAction;
+  }
 
   // Per-map bookmark-name format: a shared policy that overrides every member's
   // personal format, so it's owner/admin-gated exactly like the K-space policy /
@@ -2643,6 +2656,7 @@ mapsRouter.patch('/:mapId', async (req, res) => {
       ...(skipKspace !== undefined ? { skipKspace: skipKspace === true } : {}),
       ...(lazyRemoveWormholes !== undefined ? { lazyRemoveWormholes: lazyRemoveWormholes === true } : {}),
       ...(normalizedGrace !== undefined ? { collapseGraceHours: normalizedGrace } : {}),
+      ...(normalizedAction !== undefined ? { collapseAction: normalizedAction } : {}),
       ...(normalizedBookmarkFmt !== undefined ? { bookmarkFormat: normalizedBookmarkFmt } : {}),
       ...(normalizedSiteBookmarkFmt !== undefined ? { siteBookmarkFormat: normalizedSiteBookmarkFmt } : {}),
     });

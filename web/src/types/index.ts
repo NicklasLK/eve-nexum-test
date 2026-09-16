@@ -10,6 +10,9 @@ export type WormholeEffect =
 
 export type MassStatus = 'stable' | 'destabilized' | 'critical';
 export type TimeStatus = 'fresh' | 'eol' | 'lessThan24h' | 'lessThan4h' | 'lessThan1h' | 'expired';
+/** What a lazy-removal map does with a wormhole connection once its lifetime has
+ *  run out past the collapse grace. Mirrors server/src/services/deadConnections.ts. */
+export type CollapseAction = 'break' | 'disconnect' | 'prune';
 export type ConnectionSize = 'xl' | 'large' | 'medium' | 'small';
 export type SystemStatus = 'unknown' | 'visited' | 'cleared';
 
@@ -236,6 +239,11 @@ export interface WormholeMap {
   /** Lazy-removal maps only: hours an expired connection lingers before the
    *  lifetime sweep severs it and drops its backing sigs. Default 0.5 (30 min). */
   collapseGraceHours?: number;
+  /** Lazy-removal maps only: what the expiry sweep does with a dead connection
+   *  once the grace has run out. 'break' (default) marks it broken and keeps it;
+   *  'disconnect' deletes the connection; 'prune' also deletes every system left
+   *  without a route back to home. */
+  collapseAction?: CollapseAction;
   /** Per-map bookmark-name format override. When set (non-empty), every user on
    *  this map copies bookmarks in this format; when null/absent, each user falls
    *  back to their own nexum.sig.bookmarkFormat global setting. */

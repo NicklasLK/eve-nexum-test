@@ -72,3 +72,17 @@ describe('connLifetimeAction', () => {
     expect(connLifetimeAction(row, now, GRACE)).toEqual({ kind: 'collapse' });
   });
 });
+
+describe('connLifetimeAction on a quarantined hole', () => {
+  const now = Date.now();
+
+  it('never re-buckets a broken hole — its label is moot', () => {
+    expect(connLifetimeAction(q003(5, { lazyRemove: true, timeStatus: 'lessThan1h', broken: true }), now, GRACE))
+      .toEqual({ kind: 'none' });
+  });
+
+  it('still collapses a broken hole once its own life has run out past the grace', () => {
+    expect(connLifetimeAction(q003(7, { lazyRemove: true, timeStatus: 'expired', broken: true }), now, GRACE))
+      .toEqual({ kind: 'collapse' });
+  });
+});

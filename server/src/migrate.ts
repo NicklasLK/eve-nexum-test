@@ -224,6 +224,11 @@ export async function migrate() {
     -- maps. 0.5 = 30 min. Editable from the map settings; also applied to the sig
     -- sweep so a hole's sig and connection disappear together.
     ALTER TABLE maps ADD COLUMN IF NOT EXISTS collapse_grace_hours DOUBLE PRECISION NOT NULL DEFAULT 0.5;
+    -- What the expiry sweeps do with a dead connection on a lazy-removal map once
+    -- the grace has run out: 'break' (mark broken, keep it), 'disconnect' (delete
+    -- the connection) or 'prune' (delete it and every system left without a route
+    -- home). See services/deadConnections.ts. DEFAULT 'break' = the old behaviour.
+    ALTER TABLE maps ADD COLUMN IF NOT EXISTS collapse_action TEXT NOT NULL DEFAULT 'break';
 
     -- Per-map bookmark-name format override. NULL (the default) means "no map
     -- policy" and each user falls back to their own nexum.sig.bookmarkFormat.

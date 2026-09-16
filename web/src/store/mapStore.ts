@@ -414,7 +414,7 @@ export type RemoteEvent =
   | { type: 'route.update';      id: string; updates: Partial<SavedRoute> }
   | { type: 'route.remove';      id: string }
   | { type: 'route.reorder';     orderedIds: string[] }
-  | { type: 'map.meta';          name?: string; locked?: boolean; allowAsMergeSource?: boolean; allowAsMergeDestination?: boolean; skipKspace?: boolean; lazyRemoveWormholes?: boolean; collapseGraceHours?: number; bookmarkFormat?: string | null; siteBookmarkFormat?: string | null }
+  | { type: 'map.meta';          name?: string; locked?: boolean; allowAsMergeSource?: boolean; allowAsMergeDestination?: boolean; skipKspace?: boolean; lazyRemoveWormholes?: boolean; collapseGraceHours?: number; collapseAction?: 'break' | 'disconnect' | 'prune'; bookmarkFormat?: string | null; siteBookmarkFormat?: string | null }
   | { type: 'map.resync' }
   | { type: 'sig.changed';       systemId: string }
   | { type: 'structure.changed'; systemId: string }
@@ -1433,6 +1433,7 @@ export const useMapStore = create<MapStore>()((set, get) => {
             ...(event.skipKspace !== undefined ? { skipKspace: event.skipKspace } : {}),
             ...(event.lazyRemoveWormholes !== undefined ? { lazyRemoveWormholes: event.lazyRemoveWormholes } : {}),
             ...(event.collapseGraceHours !== undefined ? { collapseGraceHours: event.collapseGraceHours } : {}),
+            ...(event.collapseAction !== undefined ? { collapseAction: event.collapseAction } : {}),
             ...(event.bookmarkFormat !== undefined ? { bookmarkFormat: event.bookmarkFormat } : {}),
             ...(event.siteBookmarkFormat !== undefined ? { siteBookmarkFormat: event.siteBookmarkFormat } : {}),
           };
