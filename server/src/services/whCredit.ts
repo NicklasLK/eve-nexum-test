@@ -1,9 +1,10 @@
 // Wormhole credits (plans/wh-scan-bounties.md): one row per hole, written the
-// moment its connection is known to be jump-made AND to carry a real wormhole
-// code. Jumper = the pilot whose tracked crossing drew the link; typer = the
-// pilot who first named the code (on the origin sig, or on the connection
-// itself). The row outlives the hole, so the monthly report can count it long
-// after the connection is gone. Nothing about ISK lives here.
+// moment its connection is known to be jump-made, to carry a real wormhole
+// code, AND to have a wormhole sig mapped in both end systems. Jumper = the
+// pilot whose tracked crossing drew the link; typer = the pilot who first
+// named the code (on the origin sig, or on the connection itself). The row
+// outlives the hole, so the monthly report can count it long after the
+// connection is gone. Nothing about ISK lives here.
 import { db } from '../db.js';
 import { getWormholeSpecs } from '../routes/wormholes.js';
 import { createLogger } from '../utils/logger.js';
@@ -43,6 +44,9 @@ export function originSig(conn: CreditConn, sigs: CreditSig[]): CreditSig | null
   return cands.length === 1 ? cands[0] : null;
 }
 
+const hasWormholeSig = (sigs: CreditSig[], systemId: string) =>
+  sigs.some((s) => s.sigType === 'wormhole' && s.systemId === systemId);
+
 /** null = not (yet) creditable. Pure; see whCredit.test.ts. */
 export function evaluate(
   conn: CreditConn, sigs: CreditSig[], knownCodes: Set<string>, excludedRegions: Set<number> = new Set(),
@@ -54,6 +58,10 @@ export function evaluate(
   if (conn.createdVia !== 'jump' || conn.createdByUserId == null) return null;
   const c = code(conn.whType);
   if (!c || c === 'K162' || !knownCodes.has(c)) return null;    // K162 only says "far side"
+  // Scanned on both sides: a wormhole sig mapped in each end system (the far
+  // side's is normally the K162). Jumping a hole nobody scanned into the map
+  // is not the work being credited — so this waits for the second sig.
+  if (!hasWormholeSig(sigs, conn.sourceSystemId) || !hasWormholeSig(sigs, conn.targetSystemId)) return null;
   const typer = originSig(conn, sigs)?.whTypeSetByUserId ?? conn.whTypeSetByUserId ?? null;
   if (typer == null) return null;
   return { jumperUserId: conn.createdByUserId, typerUserId: typer, whType: c };
@@ -129,9 +137,38 @@ export async function creditConnection(mapId: string, connectionId: string): Pro
   return (rowCount ?? 0) > 0;
 }
 
-/** Fire-and-forget for the write paths. */
+/** Fire-and-forget for the connection write paths. */
 export function creditSoon(mapId: string, connectionId: string): void {
   void creditConnection(mapId, connectionId).catch((err) => log.error('credit failed:', err));
+}
+
+/**
+ * Re-evaluate every uncredited jump-made, typed link touching one system: a
+ * wormhole sig just written there may be the far-side scan that completes the
+ * both-sides rule. Cheap — the candidate set is one map's links to one system.
+ */
+export async function creditSystem(mapId: string, systemId: string): Promise<number> {
+  const { rows } = await db.query<{ id: string }>(
+    `SELECT c.id
+       FROM map_connections c
+       LEFT JOIN wh_credits w ON w.connection_id = c.id
+      WHERE w.connection_id IS NULL
+        AND c.map_id = $1 AND (c.source_id = $2 OR c.target_id = $2)
+        AND c.created_via = 'jump' AND c.connection_type = 'standard'
+        AND COALESCE(c.wh_type, '') <> '' AND UPPER(c.wh_type) <> 'K162'`,
+    [mapId, systemId],
+  );
+  let n = 0;
+  for (const r of rows) {
+    try { if (await creditConnection(mapId, r.id)) n++; }
+    catch (err) { log.error(`system ${systemId}: connection ${r.id} failed:`, err); }
+  }
+  return n;
+}
+
+/** Fire-and-forget for the signature write paths. */
+export function creditSystemSoon(mapId: string, systemId: string): void {
+  void creditSystem(mapId, systemId).catch((err) => log.error('credit failed:', err));
 }
 
 /** Catch anything a trigger missed: recent jump-made, typed, uncredited connections. */
@@ -143,7 +180,11 @@ export async function sweepCredits(): Promise<number> {
       WHERE w.connection_id IS NULL
         AND c.created_via = 'jump' AND c.connection_type = 'standard'
         AND COALESCE(c.wh_type, '') <> '' AND UPPER(c.wh_type) <> 'K162'
-        AND c.created_at > NOW() - INTERVAL '48 hours'`,
+        AND c.created_at > NOW() - INTERVAL '48 hours'
+        -- Scanned on both sides. evaluate() checks this too; filtering here
+        -- keeps the sweep from re-reading the same half-scanned links every tick.
+        AND EXISTS (SELECT 1 FROM map_signatures s WHERE s.system_id = c.source_id AND s.sig_type = 'wormhole')
+        AND EXISTS (SELECT 1 FROM map_signatures s WHERE s.system_id = c.target_id AND s.sig_type = 'wormhole')`,
   );
   let n = 0;
   for (const r of rows) {

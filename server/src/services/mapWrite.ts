@@ -4,6 +4,7 @@ import { syncSignature, syncAnomaly } from './crossMapSync.js';
 import { recordGhostSiteIfMatch } from './ghostSites.js';
 import { createLogger } from '../utils/logger.js';
 import { namesTyper } from './connectionOrigin.js';
+import { creditSystemSoon } from './whCredit.js';
 
 const log = createLogger('map-write');
 
@@ -66,6 +67,9 @@ export async function createSignature(mapId: string, systemId: string, d: Signat
      d.massStatus, d.timeStatus, actor.userId,
      namesTyper('', d.whType) ? actor.userId : null],
   );
+  // A wormhole sig here may be the far-side scan that completes a wormhole
+  // credit for a jump-made link into this system (whCredit's both-sides rule).
+  if (d.sigType === 'wormhole') creditSystemSoon(mapId, systemId);
   db.query(`INSERT INTO user_events (user_id, event_type, sig_type) VALUES ($1, 'signature', $2)`,
     [actor.userId, d.sigType]).catch(console.error);
   bumpActivity(systemId);
@@ -124,6 +128,9 @@ export async function updateSignature(
   if (typeof updates.name === 'string') recordGhostSiteIfMatch(systemId, updates.name);
   publishToMap(mapId, { type: 'sig.changed', actor: actor.clientId, systemId });
   syncSignature(mapId, systemId, sigId, actor.userId);
+  // Becoming a wormhole sig, or being given a code, may complete a wormhole
+  // credit for a jump-made link touching this system (whCredit).
+  if (updates.sigType === 'wormhole' || 'whType' in updates) creditSystemSoon(mapId, systemId);
   return {
     dispatchK162: settingK162 && !prevWasK162,
     flushK162: typeof updates.whLeadsTo === 'string' && updates.whLeadsTo.trim().length > 0,
