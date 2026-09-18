@@ -20,7 +20,15 @@
    so a tall card in one leaves no hole beside it in the next. */
 .panel-stack--cols {
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: flex-start;
+}
+
+/* The pane chooser bar (SystemPanel's .system-panel__stack-bar) is the stack's
+   first child. In column mode it takes the whole first row so the columns
+   start beneath it instead of treating it as one more column. */
+.panel-stack--cols > .system-panel__stack-bar {
+  flex: 0 0 100%;
 }
 
 .panel-stack__col {

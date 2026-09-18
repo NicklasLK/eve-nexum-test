@@ -1362,7 +1362,7 @@
     "collapseAction": "已消失的虫洞",
     "collapseActionBreak": "将连接标记为断开",
     "collapseActionDisconnect": "移除连接",
-    "collapseActionHint": "连接的寿命耗尽且宽限期过后如何处理。“标记为断开”会将其保留在地图上以便重新扫描。“移除连接”会删除该连接。“同时移除孤立星系”还会删除所有失去返回母星系路线的星系（母星系、已锁定的星系以及当前有地图查看者所在的星系除外）。在服务器端执行，无法撤销。",
+    "collapseActionHint": "连接的寿命耗尽且宽限期过后如何处理。“标记为断开”会将其灰显并保留在地图上以便重新扫描；若几小时内（默认 3 小时，由服务器设定）无人恢复，也会被移除。“移除连接”会删除该连接。“同时移除孤立星系”还会删除所有失去返回母星系路线的星系（母星系、已锁定的星系以及当前有地图查看者所在的星系除外）。在服务器端执行，无法撤销。",
     "collapseActionPrune": "移除连接及孤立星系",
     "collapseGrace": "坍缩宽限期",
     "collapseGraceHint": "过期虫洞在被切断并移除其信号之前等待的时间。",
@@ -1464,10 +1464,12 @@
     "notifWatchlist": "监视列表匹配",
     "notifExits": "k-space 出口",
     "notifExitsMinSec": "提醒的出口安全等级",
+    "notifExitsOff": "关闭 — 从不提醒",
     "notifExitsHiSec": "仅高安",
     "notifExitsLowSec": "低安及以上",
     "notifExitsAny": "任意 k-space",
     "notifExitsHint": "当链上出现不低于该安全等级的出口时提醒一次。默认关闭。",
+    "notifVolume": "提醒音量 — {{pct}}%",
     "openOptions": "地图选项",
     "optimizeConnections": "⟳ 优化连接",
     "panelBelow": "地图下方",
@@ -1740,7 +1742,11 @@
     "resize": "调整侧栏大小",
     "collapse": "收起侧栏",
     "moveToLeft": "将侧栏移到左侧",
-    "moveToRight": "将侧栏移到右侧"
+    "moveToRight": "将侧栏移到右侧",
+    "panelsTitle": "侧边栏板块",
+    "panelsHint": "选择侧边栏中显示的板块。隐藏的板块会保留位置，重新开启时回到原处。",
+    "panelsAllHidden": "所有板块都已隐藏 — 侧边栏将是空的。",
+    "emptyTitle": "当前没有显示任何板块。在此选择要显示的板块。"
   },
   "sigType": {
     "combat": "战斗",
@@ -1784,6 +1790,10 @@
     "colType": "分组",
     "colWh": "类型",
     "colLeadsTo": "通往",
+    "colWhState": "状态",
+    "colWhStateHint": "虫洞的质量与剩余寿命。二者在太空中看洞即可得知，因此跳跃前就能记录。",
+    "whStateMass": "质量：点击切换 充足 / 低于 50% / 低于 10%",
+    "whStateLife": "寿命：点击切换 未知 / 不足 1 天 / 不足 4 小时 / 不足 1 小时",
     "colName": "名称",
     "colNotes": "笔记",
     "colAge": "存在时长",
@@ -1885,7 +1895,9 @@
     "standingsNotLoaded": "声望尚未加载。如果一直如此，请登出后重新登录以授予 read_contacts 权限。",
     "standingNotInBucket": "{{label}}：你不属于任何一类",
     "standingNotSet": "{{label}}：未设置声望",
-    "standingValue": "{{label}}：{{value}}"
+    "standingValue": "{{label}}：{{value}}",
+    "panesTitle": "面板",
+    "panesHint": "选择下方显示的面板。隐藏的面板会保留位置，重新开启时回到原处。"
   },
   "time": {
     "justNow": "刚刚",

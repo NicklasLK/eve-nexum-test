@@ -1362,7 +1362,7 @@
     "collapseAction": "消滅したワームホール",
     "collapseActionBreak": "接続を切断済みにする",
     "collapseActionDisconnect": "接続を削除",
-    "collapseActionHint": "寿命が尽きて猶予も過ぎた接続の扱い。「切断済みにする」はマップに残して再スキャンに備えます。「接続を削除」は接続を削除します。「孤立したシステムも削除」はさらに、ホームへの経路を失ったシステムをすべて削除します（ホーム、ロック済みシステム、マップ閲覧者が現在いるシステムは除く）。サーバー側で実行され、元に戻せません。",
+    "collapseActionHint": "寿命が尽きて猶予も過ぎた接続の扱い。「切断済みにする」はグレー表示のままマップに残して再スキャンに備えます。数時間（既定では3時間、サーバー側で設定）以内に復旧されなければ、こちらも削除されます。「接続を削除」は接続を削除します。「孤立したシステムも削除」はさらに、ホームへの経路を失ったシステムをすべて削除します（ホーム、ロック済みシステム、マップ閲覧者が現在いるシステムは除く）。サーバー側で実行され、元に戻せません。",
     "collapseActionPrune": "接続と孤立したシステムを削除",
     "collapseGrace": "崩壊までの猶予",
     "collapseGraceHint": "期限切れのワームホールが切断され、シグネチャが削除されるまでの待機時間。",
@@ -1464,10 +1464,12 @@
     "notifWatchlist": "ウォッチリスト一致",
     "notifExits": "k-spaceの出口",
     "notifExitsMinSec": "通知する出口のセキュリティ",
+    "notifExitsOff": "オフ — 通知しない",
     "notifExitsHiSec": "ハイセクのみ",
     "notifExitsLowSec": "ローセク以上",
     "notifExitsAny": "すべてのk-space",
     "notifExitsHint": "この値以上のセキュリティの出口がチェーンに現れたとき、一度だけ通知します。既定ではオフです。",
+    "notifVolume": "通知音量 — {{pct}}%",
     "openOptions": "マップオプション",
     "optimizeConnections": "⟳ 接続を最適化",
     "panelBelow": "マップの下",
@@ -1740,7 +1742,11 @@
     "resize": "サイドバーのサイズ変更",
     "collapse": "サイドバーを折りたたむ",
     "moveToLeft": "サイドバーを左へ移動",
-    "moveToRight": "サイドバーを右へ移動"
+    "moveToRight": "サイドバーを右へ移動",
+    "panelsTitle": "サイドバーのセクション",
+    "panelsHint": "サイドバーに表示するセクションを選びます。非表示にしたものも位置は保持され、再表示すると元の場所に戻ります。",
+    "panelsAllHidden": "すべてのセクションが非表示です — サイドバーは空になります。",
+    "emptyTitle": "表示中のセクションがありません。ここで表示するものを選べます。"
   },
   "sigType": {
     "combat": "コンバット",
@@ -1784,6 +1790,10 @@
     "colType": "グループ",
     "colWh": "タイプ",
     "colLeadsTo": "接続先",
+    "colWhState": "状態",
+    "colWhStateHint": "ワームホールの質量と残り寿命。どちらも宇宙空間でホールを見れば分かるため、ジャンプ前に入力できます。",
+    "whStateMass": "質量: クリックで 満杯 / 50%未満 / 10%未満",
+    "whStateLife": "寿命: クリックで 不明 / 1日未満 / 4時間未満 / 1時間未満",
     "colName": "名前",
     "colNotes": "メモ",
     "colAge": "経過",
@@ -1885,7 +1895,9 @@
     "standingsNotLoaded": "スタンディングがまだ読み込まれていません。これが続く場合は、ログアウトして再ログインし read_contacts スコープを付与してください。",
     "standingNotInBucket": "{{label}}: どれにも属していません",
     "standingNotSet": "{{label}}: スタンディング未設定",
-    "standingValue": "{{label}}: {{value}}"
+    "standingValue": "{{label}}: {{value}}",
+    "panesTitle": "パネル",
+    "panesHint": "下に表示するパネルを選びます。非表示にしたものも位置は保持され、再表示すると元の場所に戻ります。"
   },
   "time": {
     "justNow": "たった今",

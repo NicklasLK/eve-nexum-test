@@ -1362,7 +1362,7 @@
     "collapseAction": "Buracos mortos",
     "collapseActionBreak": "Marcar a conexão como quebrada",
     "collapseActionDisconnect": "Remover a conexão",
-    "collapseActionHint": "O que acontece a uma conexão quando o seu tempo de vida termina e a tolerância passa. Marcar como quebrada mantém-na no mapa para novo scan. Remover apaga a conexão. Remover também os sistemas isolados apaga ainda todos os sistemas que ficam sem rota de volta ao sistema base, exceto o base, sistemas bloqueados e qualquer sistema onde esteja agora alguém a ver o mapa. Corre no servidor e não pode ser desfeito.",
+    "collapseActionHint": "O que acontece a uma conexão quando o seu tempo de vida termina e a tolerância passa. Marcar como quebrada mantém-na no mapa, esbatida, para novo scan; se ninguém a repuser dentro de algumas horas (três por defeito, definido no servidor), é também removida. Remover apaga a conexão. Remover também os sistemas isolados apaga ainda todos os sistemas que ficam sem rota de volta ao sistema base, exceto o base, sistemas bloqueados e qualquer sistema onde esteja agora alguém a ver o mapa. Corre no servidor e não pode ser desfeito.",
     "collapseActionPrune": "Remover a conexão e os sistemas isolados",
     "collapseGrace": "Margem de colapso",
     "collapseGraceHint": "Quanto tempo um buraco de minhoca expirado aguarda antes de ser cortado e suas assinaturas removidas.",
@@ -1464,10 +1464,12 @@
     "notifWatchlist": "Correspondência da lista de observação",
     "notifExits": "Saídas para k-space",
     "notifExitsMinSec": "Alertar sobre saídas de",
+    "notifExitsOff": "Desligado — nunca alertar",
     "notifExitsHiSec": "Apenas alta segurança",
     "notifExitsLowSec": "Baixa segurança ou melhor",
     "notifExitsAny": "Qualquer k-space",
     "notifExitsHint": "Alerta uma vez quando surge na cadeia uma saída com pelo menos esta segurança. Desativado por predefinição.",
+    "notifVolume": "Volume dos alertas — {{pct}} %",
     "openOptions": "Opções de mapa",
     "optimizeConnections": "⟳ Otimizar conexões",
     "panelBelow": "Abaixo do mapa",
@@ -1740,7 +1742,11 @@
     "resize": "Redimensionar barra lateral",
     "collapse": "Recolher barra lateral",
     "moveToLeft": "Mover barra lateral para a esquerda",
-    "moveToRight": "Mover barra lateral para a direita"
+    "moveToRight": "Mover barra lateral para a direita",
+    "panelsTitle": "Secções da barra lateral",
+    "panelsHint": "Escolha que secções aparecem na barra lateral. As ocultas mantêm o seu lugar e regressam a ele quando as reativar.",
+    "panelsAllHidden": "Todas as secções estão ocultas — a barra lateral ficará vazia.",
+    "emptyTitle": "Não há secções visíveis. Escolha aqui as que pretende."
   },
   "sigType": {
     "combat": "Combate",
@@ -1784,6 +1790,10 @@
     "colType": "Grupo",
     "colWh": "Tipo",
     "colLeadsTo": "Leva a",
+    "colWhState": "Estado",
+    "colWhStateHint": "Massa e vida restante do buraco. Ambas se leem no próprio buraco, por isso podem ser definidas antes de o saltar.",
+    "whStateMass": "Massa: clicar para completa / menos de 50 % / menos de 10 %",
+    "whStateLife": "Vida: clicar para desconhecida / menos de 1 dia / menos de 4 horas / menos de 1 hora",
     "colName": "Nome",
     "colNotes": "Notas",
     "colAge": "Idade",
@@ -1885,7 +1895,9 @@
     "standingsNotLoaded": "Standings ainda não carregados. Se isto persistir, termina a sessão e volta a entrar para conceder os scopes read_contacts.",
     "standingNotInBucket": "{{label}}: não estás em nenhum",
     "standingNotSet": "{{label}}: sem standing definido",
-    "standingValue": "{{label}}: {{value}}"
+    "standingValue": "{{label}}: {{value}}",
+    "panesTitle": "Painéis",
+    "panesHint": "Escolha que painéis aparecem abaixo. Os ocultos mantêm o seu lugar e regressam a ele quando os reativar."
   },
   "time": {
     "justNow": "agora mesmo",

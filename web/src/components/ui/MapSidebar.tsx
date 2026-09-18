@@ -21,7 +21,7 @@ import {
 import { useUserSetting } from "../../hooks/useUserSetting";
 import { PANEL_COLS_KEY, MAX_PANEL_COLS, clampPanelCols } from "../../utils/panelCols";
 import { normalizePlacement } from "../../hooks/useLocationTracking";
-import { NOTIFY, notifyDefault, EXITS_MIN_SECURITY_KEY, EXITS_MIN_SECURITY_DEFAULT } from "../../utils/notificationPrefs";
+import { NOTIFY, notifyDefault, previewAlertVolume, ALERT_VOLUME_KEY, ALERT_VOLUME_DEFAULT, EXITS_MIN_SECURITY_KEY, EXITS_MIN_SECURITY_DEFAULT, EXITS_MIN_SECURITY_OFF } from "../../utils/notificationPrefs";
 import { useResettableState } from "../../hooks/useResettableState";
 import { DEFAULT_BOOKMARK_FORMAT, BOOKMARK_TOKENS, DEFAULT_SITE_BOOKMARK_FORMAT, SITE_BOOKMARK_TOKENS } from "../../utils/signatureBookmark";
 import { toPng } from "html-to-image";
@@ -939,6 +939,7 @@ export function MapSidebar() {
   const compactMode = useMapStore((s) => s.compactMode);
   const panelSideBySide = useMapStore((s) => s.panelSideBySide);
   const [exitsMinSec, setExitsMinSec] = useUserSetting<number>(EXITS_MIN_SECURITY_KEY, EXITS_MIN_SECURITY_DEFAULT);
+  const [alertVolume, setAlertVolume] = useUserSetting<number>(ALERT_VOLUME_KEY, ALERT_VOLUME_DEFAULT);
   const setPanelSideBySide = useMapStore((s) => s.setPanelSideBySide);
   const [panelColsRaw, setPanelCols] = useUserSetting<number>(PANEL_COLS_KEY, 1);
   const panelCols = clampPanelCols(panelColsRaw);
@@ -1622,6 +1623,7 @@ export function MapSidebar() {
               value={String(exitsMinSec)}
               onChange={(v) => setExitsMinSec(Number(v))}
               options={[
+                { value: String(EXITS_MIN_SECURITY_OFF), label: t("mapSidebar.notifExitsOff") },
                 { value: "0.45", label: t("mapSidebar.notifExitsHiSec") },
                 { value: "0.05", label: t("mapSidebar.notifExitsLowSec") },
                 { value: "-1",   label: t("mapSidebar.notifExitsAny") },
@@ -1629,6 +1631,25 @@ export function MapSidebar() {
             />
           </label>
           <div className="map-sidebar__hint">{t("mapSidebar.notifExitsHint")}</div>
+
+          {/* Alert volume. The chimes are generated in code rather than played
+              from a file, so this scales their gain — and macOS has no per-app
+              volume to fall back on. Releasing the slider plays a sample, since
+              a number alone tells you nothing about how loud it actually is. */}
+          <label className="map-sidebar__field">
+            <span>{t("mapSidebar.notifVolume", { pct: alertVolume })}</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={alertVolume}
+              onChange={(e) => setAlertVolume(Number(e.target.value))}
+              onMouseUp={() => previewAlertVolume()}
+              onKeyUp={() => previewAlertVolume()}
+              aria-label={t("mapSidebar.notifVolume", { pct: alertVolume })}
+            />
+          </label>
         </CollapsibleSection>
 
         <CollapsibleSection title={t("mapSidebar.sections.announcer")} {...sectionProps("announcer")}>

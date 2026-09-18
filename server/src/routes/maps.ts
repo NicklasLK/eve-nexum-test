@@ -3632,7 +3632,7 @@ mapsRouter.patch('/:mapId/connections/:connectionId', async (req, res) => {
     timeStatus: 'time_status', size: 'size',
     sourceHandle: 'source_handle', targetHandle: 'target_handle',
     type: 'wh_type', massUsed: 'mass_used',
-    eolAt: 'eol_at', lifetimeExpiresAt: 'lifetime_expires_at', broken: 'broken',
+    eolAt: 'eol_at', lifetimeExpiresAt: 'lifetime_expires_at', broken: 'broken', brokenAt: 'broken_at',
     flagIcon: 'flag_icon', flagNote: 'flag_note', flagBlink: 'flag_blink', flagColor: 'flag_color',
     sourceSignatureId: 'source_signature_id', targetSignatureId: 'target_signature_id',
   };
@@ -3728,6 +3728,13 @@ mapsRouter.patch('/:mapId/connections/:connectionId', async (req, res) => {
         if (expiry != null) updates.timeStatus = lifeBucket(expiry - Date.now());
       }
     } catch { /* leave time_status as-is on any lookup failure */ }
+  }
+
+  // Keep broken_at in step with broken, so the removal sweep measures from when
+  // the link actually broke. Restoring one clears the stamp, which also resets
+  // its grace period if it breaks again later.
+  if ('broken' in updates) {
+    updates.brokenAt = updates.broken === true ? new Date().toISOString() : null;
   }
 
   const sets: string[] = [];
@@ -3991,10 +3998,10 @@ mapsRouter.post('/:mapId/systems/:systemId/signatures', async (req, res) => {
   const access = await requireMapContentWrite(res, mapId, req);
   if (!access) return;
   if (!(await verifySystemInMap(res, systemId, mapId))) return;
-  const { sigId = '', sigType = 'unknown', name = '', notes = '', whType = '', whLeadsTo = '', ghostType = '' } = req.body as Record<string, string>;
+  const { sigId = '', sigType = 'unknown', name = '', notes = '', whType = '', whLeadsTo = '', ghostType = '', massStatus = '', timeStatus = '' } = req.body as Record<string, string>;
   const me = authUser(req);
   const row = await createSignature(
-    mapId, systemId, { sigId, sigType, name, notes, whType, whLeadsTo, ghostType },
+    mapId, systemId, { sigId, sigType, name, notes, whType, whLeadsTo, ghostType, massStatus, timeStatus },
     { userId: me.userId, clientId: req.get('x-client-id') ?? null },
   );
   if ((whType ?? '').toUpperCase() === 'K162') dispatchK162(access, row.id, systemId, me.characterName);

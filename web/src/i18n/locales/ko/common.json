@@ -1362,7 +1362,7 @@
     "collapseAction": "소멸한 웜홀",
     "collapseActionBreak": "연결을 끊어진 것으로 표시",
     "collapseActionDisconnect": "연결 제거",
-    "collapseActionHint": "수명이 다하고 유예 시간도 지난 연결을 어떻게 처리할지 정합니다. '끊어진 것으로 표시'는 재스캔을 위해 지도에 남겨 둡니다. '연결 제거'는 연결을 삭제합니다. '고립된 시스템까지 제거'는 홈으로 가는 경로를 잃은 시스템도 모두 삭제합니다(홈, 잠긴 시스템, 지도 열람자가 현재 있는 시스템은 제외). 서버에서 실행되며 되돌릴 수 없습니다.",
+    "collapseActionHint": "수명이 다하고 유예 시간도 지난 연결을 어떻게 처리할지 정합니다. '끊어진 것으로 표시'는 재스캔을 위해 회색으로 지도에 남겨 둡니다. 몇 시간(기본 3시간, 서버에서 설정) 안에 복구되지 않으면 이 연결도 제거됩니다. '연결 제거'는 연결을 삭제합니다. '고립된 시스템까지 제거'는 홈으로 가는 경로를 잃은 시스템도 모두 삭제합니다(홈, 잠긴 시스템, 지도 열람자가 현재 있는 시스템은 제외). 서버에서 실행되며 되돌릴 수 없습니다.",
     "collapseActionPrune": "연결과 고립된 시스템 제거",
     "collapseGrace": "붕괴 유예 시간",
     "collapseGraceHint": "만료된 웜홀이 끊기고 시그니처가 제거되기까지 대기하는 시간입니다.",
@@ -1464,10 +1464,12 @@
     "notifWatchlist": "워치리스트 일치",
     "notifExits": "k-space 출구",
     "notifExitsMinSec": "알릴 출구 보안도",
+    "notifExitsOff": "끔 — 알리지 않음",
     "notifExitsHiSec": "하이섹만",
     "notifExitsLowSec": "로우섹 이상",
     "notifExitsAny": "모든 k-space",
     "notifExitsHint": "이 보안도 이상의 출구가 체인에 나타나면 한 번 알립니다. 기본값은 꺼짐입니다.",
+    "notifVolume": "알림 음량 — {{pct}}%",
     "openOptions": "지도 옵션",
     "optimizeConnections": "⟳ 연결 최적화",
     "panelBelow": "지도 아래",
@@ -1740,7 +1742,11 @@
     "resize": "사이드바 크기 조정",
     "collapse": "사이드바 접기",
     "moveToLeft": "사이드바를 왼쪽으로 이동",
-    "moveToRight": "사이드바를 오른쪽으로 이동"
+    "moveToRight": "사이드바를 오른쪽으로 이동",
+    "panelsTitle": "사이드바 섹션",
+    "panelsHint": "사이드바에 표시할 섹션을 선택하세요. 숨긴 섹션도 위치를 유지하므로 다시 켜면 원래 자리로 돌아옵니다.",
+    "panelsAllHidden": "모든 섹션이 숨겨져 있습니다 — 사이드바가 비어 있게 됩니다.",
+    "emptyTitle": "표시 중인 섹션이 없습니다. 여기에서 원하는 섹션을 선택하세요."
   },
   "sigType": {
     "combat": "전투",
@@ -1784,6 +1790,10 @@
     "colType": "그룹",
     "colWh": "유형",
     "colLeadsTo": "연결 대상",
+    "colWhState": "상태",
+    "colWhStateHint": "웜홀의 질량과 남은 수명. 둘 다 우주에서 홀을 보면 알 수 있으므로 점프 전에 기록할 수 있습니다.",
+    "whStateMass": "질량: 클릭하여 가득 / 50% 미만 / 10% 미만",
+    "whStateLife": "수명: 클릭하여 알 수 없음 / 1일 미만 / 4시간 미만 / 1시간 미만",
     "colName": "이름",
     "colNotes": "노트",
     "colAge": "경과",
@@ -1885,7 +1895,9 @@
     "standingsNotLoaded": "스탠딩이 아직 로드되지 않았습니다. 계속 이 상태라면, 로그아웃 후 다시 로그인하여 read_contacts 스코프를 부여하세요.",
     "standingNotInBucket": "{{label}}: 어느 쪽에도 속하지 않음",
     "standingNotSet": "{{label}}: 스탠딩이 설정되지 않음",
-    "standingValue": "{{label}}: {{value}}"
+    "standingValue": "{{label}}: {{value}}",
+    "panesTitle": "패널",
+    "panesHint": "아래에 표시할 패널을 선택하세요. 숨긴 패널도 위치를 유지하므로 다시 켜면 원래 자리로 돌아옵니다."
   },
   "time": {
     "justNow": "방금",

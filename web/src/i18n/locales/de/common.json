@@ -1362,7 +1362,7 @@
     "collapseAction": "Tote Wurmlöcher",
     "collapseActionBreak": "Verbindung als unterbrochen markieren",
     "collapseActionDisconnect": "Verbindung entfernen",
-    "collapseActionHint": "Was mit einer Verbindung passiert, sobald ihre Lebensdauer abgelaufen und die Verzögerung verstrichen ist. Als unterbrochen markieren behält sie zum erneuten Scannen auf der Karte. Verbindung entfernen löscht die Verbindung. Abgeschnittene Systeme entfernen löscht zusätzlich jedes System ohne Route zurück zum Heimatsystem – außer dem Heimatsystem, gesperrten Systemen und Systemen, in denen sich gerade ein Betrachter der Karte befindet. Läuft serverseitig und kann nicht rückgängig gemacht werden.",
+    "collapseActionHint": "Was mit einer Verbindung passiert, sobald ihre Lebensdauer abgelaufen und die Verzögerung verstrichen ist. Als unterbrochen markieren behält sie ausgegraut zum erneuten Scannen auf der Karte; wird sie nicht innerhalb weniger Stunden (standardmäßig drei, vom Server festgelegt) wiederhergestellt, wird sie ebenfalls entfernt. Verbindung entfernen löscht die Verbindung. Abgeschnittene Systeme entfernen löscht zusätzlich jedes System ohne Route zurück zum Heimatsystem – außer dem Heimatsystem, gesperrten Systemen und Systemen, in denen sich gerade ein Betrachter der Karte befindet. Läuft serverseitig und kann nicht rückgängig gemacht werden.",
     "collapseActionPrune": "Verbindung und abgeschnittene Systeme entfernen",
     "collapseGrace": "Kollaps-Verzögerung",
     "collapseGraceHint": "Wie lange ein abgelaufenes Wurmloch wartet, bevor es getrennt und seine Signaturen entfernt werden.",
@@ -1464,10 +1464,12 @@
     "notifWatchlist": "Beobachtungslisten-Treffer",
     "notifExits": "K-Space-Ausgänge",
     "notifExitsMinSec": "Melden bei Ausgängen ab",
+    "notifExitsOff": "Aus — nie melden",
     "notifExitsHiSec": "Nur Hi-Sec",
     "notifExitsLowSec": "Low-Sec und besser",
     "notifExitsAny": "Jeder K-Space",
     "notifExitsHint": "Meldet einmalig, wenn ein Ausgang mit mindestens dieser Sicherheit in der Kette auftaucht. Standardmäßig aus.",
+    "notifVolume": "Warnlautstärke — {{pct}} %",
     "openOptions": "Kartenoptionen",
     "optimizeConnections": "⟳ Verbindungen optimieren",
     "panelBelow": "Unter Karte",
@@ -1740,7 +1742,11 @@
     "resize": "Seitenleiste anpassen",
     "collapse": "Seitenleiste einklappen",
     "moveToLeft": "Seitenleiste nach links verschieben",
-    "moveToRight": "Seitenleiste nach rechts verschieben"
+    "moveToRight": "Seitenleiste nach rechts verschieben",
+    "panelsTitle": "Seitenleisten-Abschnitte",
+    "panelsHint": "Wähle, welche Abschnitte in der Seitenleiste erscheinen. Ausgeblendete behalten ihren Platz und kehren beim Wiedereinschalten dorthin zurück.",
+    "panelsAllHidden": "Alle Abschnitte sind ausgeblendet — die Seitenleiste bleibt leer.",
+    "emptyTitle": "Es werden keine Abschnitte angezeigt. Wähle hier aus, welche du möchtest."
   },
   "sigType": {
     "combat": "Kampf",
@@ -1784,6 +1790,10 @@
     "colType": "Gruppe",
     "colWh": "Typ",
     "colLeadsTo": "Führt zu",
+    "colWhState": "Status",
+    "colWhStateHint": "Masse und Restlebensdauer eines Wurmlochs. Beides lässt sich im All am Loch ablesen, also schon vor dem Sprung eintragbar.",
+    "whStateMass": "Masse: klicken für voll / unter 50 % / unter 10 %",
+    "whStateLife": "Lebensdauer: klicken für unbekannt / unter 1 Tag / unter 4 Stunden / unter 1 Stunde",
     "colName": "Name",
     "colNotes": "Notizen",
     "colAge": "Alter",
@@ -1885,7 +1895,9 @@
     "standingsNotLoaded": "Standings noch nicht geladen. Wenn dies bestehen bleibt, melde dich ab und wieder an, um die read_contacts-Scopes zu gewähren.",
     "standingNotInBucket": "{{label}}: du bist in keiner",
     "standingNotSet": "{{label}}: kein Standing gesetzt",
-    "standingValue": "{{label}}: {{value}}"
+    "standingValue": "{{label}}: {{value}}",
+    "panesTitle": "Bereiche",
+    "panesHint": "Wähle, welche Bereiche unten erscheinen. Ausgeblendete behalten ihren Platz und kehren beim Wiedereinschalten dorthin zurück."
   },
   "time": {
     "justNow": "gerade eben",

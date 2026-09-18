@@ -1656,7 +1656,7 @@
     "collapseAction": "Dead wormholes",
     "collapseActionBreak": "Mark the connection broken",
     "collapseActionDisconnect": "Remove the connection",
-    "collapseActionHint": "What happens to a connection once its lifetime has run out and the grace has passed. Marking it broken keeps it on the map for a re-scout. Removing it deletes the connection. Pruning also deletes every system left without a route back to home, except home, locked systems and any system a map viewer is currently in. Removal runs server-side and can't be undone.",
+    "collapseActionHint": "What happens to a connection once its lifetime has run out and the grace has passed. Marking it broken keeps it on the map, greyed out, for a re-scout; if nobody restores it within a few hours (three by default, set by the server) it is removed as well. Removing it deletes the connection. Pruning also deletes every system left without a route back to home, except home, locked systems and any system a map viewer is currently in. Removal runs server-side and can't be undone.",
     "collapseActionPrune": "Remove the connection and cut-off systems",
     "collapseGrace": "Collapse grace",
     "collapseGraceHint": "How long an expired wormhole waits before it's severed and its signatures removed.",
@@ -1758,10 +1758,12 @@
     "notifWatchlist": "Watchlist match",
     "notifExits": "K-space exits",
     "notifExitsMinSec": "Alert on exits of",
+    "notifExitsOff": "Off — never alert",
     "notifExitsHiSec": "High-sec only",
     "notifExitsLowSec": "Low-sec and better",
     "notifExitsAny": "Any k-space",
     "notifExitsHint": "Alerts once when an exit of at least this security appears on the chain. Off by default.",
+    "notifVolume": "Alert volume — {{pct}}%",
     "openOptions": "Map options",
     "optimizeConnections": "⟳ Optimize Connections",
     "panelBelow": "Below map",
@@ -2036,7 +2038,11 @@
     "resize": "Resize sidebar",
     "collapse": "Collapse sidebar",
     "moveToLeft": "Move sidebar to left",
-    "moveToRight": "Move sidebar to right"
+    "moveToRight": "Move sidebar to right",
+    "panelsTitle": "Sidebar sections",
+    "panelsHint": "Choose which sections appear in the sidebar. Hidden ones keep their place, so switching one back on returns it to where you had it.",
+    "panelsAllHidden": "Every section is hidden — the sidebar will be empty.",
+    "emptyTitle": "No sections are showing. Choose which ones you want here."
   },
   "sigType": {
     "combat": "Combat",
@@ -2080,6 +2086,10 @@
     "colType": "Group",
     "colWh": "Type",
     "colLeadsTo": "Leads To",
+    "colWhState": "State",
+    "colWhStateHint": "A wormhole's mass and remaining life. You can read both off the hole in space, so they can be set before you jump it.",
+    "whStateMass": "Mass: click to cycle full / under 50% / under 10%",
+    "whStateLife": "Life: click to cycle unknown / under 1 day / under 4 hours / under 1 hour",
     "colName": "Name",
     "colNotes": "Notes",
     "colAge": "Age",
@@ -2194,7 +2204,9 @@
     "standingsNotLoaded": "Standings not loaded yet. If this stays here, log out and back in to grant the read_contacts scopes.",
     "standingNotInBucket": "{{label}}: you are not in one",
     "standingNotSet": "{{label}}: no standing set",
-    "standingValue": "{{label}}: {{value}}"
+    "standingValue": "{{label}}: {{value}}",
+    "panesTitle": "Panels",
+    "panesHint": "Choose which panels appear below. Hidden ones keep their place, so switching one back on returns it to where you had it."
   },
   "time": {
     "justNow": "just now",

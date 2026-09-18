@@ -2458,3 +2458,102 @@ select.sig-toolbar-btn option {
 .wh-picker__placeholder { color: var(--text-bright); font-size: calc(14px * var(--font-scale, 1)); }
 .wh-picker__inbound { color: var(--text-faintest); font-size: calc(13px * var(--font-scale, 1)); font-style: italic; margin-left: 4px; }
 
+/* Wormhole mass/life chips in the signature table. Two chips rather than two
+   columns — the table is crowded enough already. Colours match the connection
+   edge so the map and the table read the same. */
+.sig-whstate {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.sig-whstate__chip {
+  /* Fits "<50%" — the widest label either chip carries. */
+  min-width: 40px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: none;
+  color: var(--text-dim);
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 700;
+  line-height: 1.5;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sig-whstate__chip:hover { border-color: var(--border-accent); }
+
+.sig-whstate__chip--mass-destabilized {
+  border-color: var(--cv-conn-1h);
+  color: var(--cv-conn-1h);
+}
+
+.sig-whstate__chip--mass-critical {
+  border-color: var(--cv-conn-expired);
+  color: var(--cv-conn-expired);
+}
+
+/* Life buckets use the same colours as the edge label, so the table and the
+   map agree at a glance: < 1 day neutral, then amber, then red. */
+.sig-whstate__chip--time-lessThan24h {
+  border-color: var(--cv-conn-eol);
+  color: var(--cv-conn-eol);
+}
+
+.sig-whstate__chip--time-lessThan4h {
+  border-color: var(--cv-conn-4h);
+  color: var(--cv-conn-4h);
+}
+
+.sig-whstate__chip--time-lessThan1h,
+.sig-whstate__chip--time-expired {
+  border-color: var(--cv-conn-expired);
+  color: var(--cv-conn-expired);
+}
+
+/* Panel-visibility chooser, shared by the sidebar and the system panel. */
+.panel-visibility__hint {
+  margin: 0 0 10px;
+  color: var(--text-dim);
+  font-size: calc(12px * var(--font-scale, 1));
+}
+
+.panel-visibility__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.panel-visibility__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: calc(13px * var(--font-scale, 1));
+}
+
+.panel-visibility__item:hover { background: var(--surface-hover); }
+
+/* Shown when every section has been switched off, so the column explains
+   itself instead of just looking broken. */
+.sidebar__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: calc(12px * var(--font-scale, 1));
+  line-height: 1.5;
+}
+
+.sidebar__empty p { margin: 0; }
+
+.panel-visibility__empty {
+  margin: 10px 0 0;
+  color: var(--cv-conn-1h);
+  font-size: calc(12px * var(--font-scale, 1));
+}

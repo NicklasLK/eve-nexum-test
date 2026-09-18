@@ -1362,7 +1362,7 @@
     "collapseAction": "Trous de ver morts",
     "collapseActionBreak": "Marquer la connexion comme rompue",
     "collapseActionDisconnect": "Retirer la connexion",
-    "collapseActionHint": "Ce qu'il advient d'une connexion une fois sa durée de vie écoulée et le délai passé. La marquer comme rompue la garde sur la carte pour un nouveau scan. La retirer supprime la connexion. Retirer aussi les systèmes isolés supprime en plus tous les systèmes qui n'ont plus de route vers le système d'origine, sauf celui-ci, les systèmes verrouillés et tout système où se trouve actuellement un lecteur de la carte. S'exécute côté serveur et ne peut pas être annulé.",
+    "collapseActionHint": "Ce qu'il advient d'une connexion une fois sa durée de vie écoulée et le délai passé. La marquer comme rompue la garde sur la carte, grisée, pour un nouveau scan ; si personne ne la rétablit en quelques heures (trois par défaut, réglé côté serveur), elle est aussi supprimée. La retirer supprime la connexion. Retirer aussi les systèmes isolés supprime en plus tous les systèmes qui n'ont plus de route vers le système d'origine, sauf celui-ci, les systèmes verrouillés et tout système où se trouve actuellement un lecteur de la carte. S'exécute côté serveur et ne peut pas être annulé.",
     "collapseActionPrune": "Retirer la connexion et les systèmes isolés",
     "collapseGrace": "Délai avant rupture",
     "collapseGraceHint": "Temps d’attente d’un trou de ver expiré avant sa rupture et la suppression de ses signatures.",
@@ -1464,10 +1464,12 @@
     "notifWatchlist": "Correspondance de liste de surveillance",
     "notifExits": "Sorties vers le k-space",
     "notifExitsMinSec": "Alerter pour les sorties de",
+    "notifExitsOff": "Désactivé — ne jamais alerter",
     "notifExitsHiSec": "Haute sécurité uniquement",
     "notifExitsLowSec": "Basse sécurité ou mieux",
     "notifExitsAny": "Tout k-space",
     "notifExitsHint": "Alerte une fois lorsqu’une sortie d’au moins cette sécurité apparaît dans la chaîne. Désactivé par défaut.",
+    "notifVolume": "Volume des alertes — {{pct}} %",
     "openOptions": "Options de carte",
     "optimizeConnections": "⟳ Optimiser les connexions",
     "panelBelow": "Sous la carte",
@@ -1740,7 +1742,11 @@
     "resize": "Redimensionner la barre latérale",
     "collapse": "Replier la barre latérale",
     "moveToLeft": "Déplacer la barre latérale à gauche",
-    "moveToRight": "Déplacer la barre latérale à droite"
+    "moveToRight": "Déplacer la barre latérale à droite",
+    "panelsTitle": "Sections de la barre latérale",
+    "panelsHint": "Choisissez les sections affichées dans la barre latérale. Celles masquées conservent leur place et y reviennent une fois réactivées.",
+    "panelsAllHidden": "Toutes les sections sont masquées — la barre latérale sera vide.",
+    "emptyTitle": "Aucune section n’est affichée. Choisissez ici celles que vous voulez."
   },
   "sigType": {
     "combat": "Combat",
@@ -1784,6 +1790,10 @@
     "colType": "Groupe",
     "colWh": "Type",
     "colLeadsTo": "Mène à",
+    "colWhState": "État",
+    "colWhStateHint": "Masse et durée de vie restante du trou de ver. Les deux se lisent sur le trou lui-même, donc avant de le franchir.",
+    "whStateMass": "Masse : cliquer pour pleine / moins de 50 % / moins de 10 %",
+    "whStateLife": "Durée de vie : cliquer pour inconnue / moins d’un jour / moins de 4 heures / moins d’une heure",
     "colName": "Nom",
     "colNotes": "Notes",
     "colAge": "Âge",
@@ -1885,7 +1895,9 @@
     "standingsNotLoaded": "Standings pas encore chargés. Si cela persiste, déconnectez-vous et reconnectez-vous pour accorder les scopes read_contacts.",
     "standingNotInBucket": "{{label}} : vous n'êtes dans aucun",
     "standingNotSet": "{{label}} : aucun standing défini",
-    "standingValue": "{{label}} : {{value}}"
+    "standingValue": "{{label}} : {{value}}",
+    "panesTitle": "Panneaux",
+    "panesHint": "Choisissez les panneaux affichés ci-dessous. Ceux masqués conservent leur place et y reviennent une fois réactivés."
   },
   "time": {
     "justNow": "à l'instant",

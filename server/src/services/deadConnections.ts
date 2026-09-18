@@ -5,7 +5,8 @@ import { presenceSnapshot } from './presence.js';
 /**
  * What a lazy-removal map does with a wormhole connection once its lifetime has
  * run out past the collapse grace (maps.collapse_action):
- *   - 'break'      — mark it broken (quarantined) and keep it on the map;
+ *   - 'break'      — mark it broken (quarantined) and keep it on the map, until whSweep's
+ *                    stale-broken pass removes it (BROKEN_CONN_REMOVE_HOURS);
  *   - 'disconnect' — delete the connection, keep every system;
  *   - 'prune'      — delete the connection, then every system left without a
  *                    route back to home.
@@ -92,7 +93,7 @@ export async function applyCollapseAction(
 
   if (action === 'break') {
     await client.query(
-      `UPDATE map_connections SET broken = TRUE WHERE map_id = $1 AND id = ANY($2::uuid[])`, [mapId, connIds]);
+      `UPDATE map_connections SET broken = TRUE, broken_at = NOW() WHERE map_id = $1 AND id = ANY($2::uuid[])`, [mapId, connIds]);
     result.brokenIds = connIds;
     return result;
   }

@@ -15,6 +15,8 @@ import { whDestClass } from '../../utils/whDest';
 import { DraggableCard } from './DraggableCard';
 import { FloatingPanel, type PanelGeometry } from './FloatingPanel';
 import { useUserSetting } from '../../hooks/useUserSetting';
+import { SquaresFourIcon } from '../../icons';
+import { PanelVisibilityModal } from './PanelVisibilityModal';
 import { SignaturePane } from './SignaturePane';
 import { AnomalyPane } from './AnomalyPane';
 import { StructuresPane } from './StructuresPane';
@@ -203,6 +205,19 @@ export function SystemPanel() {
   const connections      = useMapStore((s) => s.map.connections);
   const selectedSystemId = useMapStore((s) => s.selectedSystemId);
   const panelOrder       = useMapStore((s) => s.panelOrder);
+  // Which panes are switched off. Stored as the HIDDEN set so a pane added in a
+  // later release shows up for everyone rather than being silently missing.
+  const [hiddenPanesRaw, setHiddenPanes] = useUserSetting<string[]>('nexum.systemPanel.hidden', []);
+  const hiddenPanes = useMemo(
+    () => new Set(Array.isArray(hiddenPanesRaw) ? hiddenPanesRaw : []),
+    [hiddenPanesRaw],
+  );
+  const togglePane = (id: string) =>
+    setHiddenPanes((prev) => {
+      const list = Array.isArray(prev) ? prev : [];
+      return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+    });
+  const [panesOpen, setPanesOpen] = useState(false);
   const updateSystem     = useMapStore((s) => s.updateSystem);
   const selectSystem     = useMapStore((s) => s.selectSystem);
   const setPanelOrder    = useMapStore((s) => s.setPanelOrder);
@@ -458,7 +473,10 @@ export function SystemPanel() {
   };
 
   // Docked (stacked) panes = order minus anything floating, minus share-hidden.
-  const dockedIds = panelOrder.filter((id) => !floatingPanels[id]).filter(shareVisible);
+  const dockedIds = panelOrder
+    .filter((id) => !floatingPanels[id])
+    .filter(shareVisible)
+    .filter((id) => !hiddenPanes.has(id));
   // Column mode is a ~460px strip beside the map — no room for more than one
   // column there, so the setting only applies to the below-the-map layout.
   // The stack is measured so a wide-screen setting degrades to however many
@@ -491,7 +509,10 @@ export function SystemPanel() {
     </DraggableCard>
   );
   // Floating panes that are still valid ids and share-visible.
-  const floatingIds = Object.keys(floatingPanels).filter((id) => cards[id] && shareVisible(id));
+  // Hidden also means hidden when popped out — otherwise switching a pane off
+  // would leave its floating window on screen with no way to reach it.
+  const floatingIds = Object.keys(floatingPanels)
+    .filter((id) => cards[id] && shareVisible(id) && !hiddenPanes.has(id));
 
   return (
     <>
@@ -876,6 +897,21 @@ export function SystemPanel() {
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={dockedIds} strategy={multiCol ? rectSortingStrategy : verticalListSortingStrategy}>
             <div ref={setStackEl} className={`panel-stack${multiCol ? ' panel-stack--cols' : ''}`}>
+              {/* Deliberately NOT in the system-info header: that block
+                  collapses, and the control people need in order to find their
+                  panels must not be able to disappear with it. In column mode
+                  it spans the full row above the columns (cards.css). */}
+              <div className="system-panel__stack-bar">
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => setPanesOpen(true)}
+                  data-tooltip={t('systemPanel.panesTitle')}
+                  aria-label={t('systemPanel.panesTitle')}
+                >
+                  <SquaresFourIcon size={14} weight="bold" />
+                </button>
+              </div>
               {multiCol
                 ? stackColumns.map((ids, c) => (
                     <div key={c} className="panel-stack__col">{ids.map(renderCard)}</div>
@@ -886,6 +922,17 @@ export function SystemPanel() {
         </DndContext>
       </div>
     </aside>
+
+    {panesOpen && (
+      <PanelVisibilityModal
+        title={t('systemPanel.panesTitle')}
+        hint={t('systemPanel.panesHint')}
+        panels={panelOrder.filter(shareVisible).map((id) => ({ id, title: panelTitle[id] ?? id }))}
+        isVisible={(id) => !hiddenPanes.has(id)}
+        onToggle={togglePane}
+        onClose={() => setPanesOpen(false)}
+      />
+    )}
 
     {/* Undocked panes — portaled floating windows that follow the selection. */}
     {floatingIds.map((id) => (

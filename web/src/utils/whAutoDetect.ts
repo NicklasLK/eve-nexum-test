@@ -1,5 +1,6 @@
 import { useMapStore } from '../store/mapStore';
 import type { Signature, MapConnection } from '../types';
+import { pendingWhState, lifePatch } from './whState';
 
 /**
  * After a signature was edited or deleted, re-evaluate every connection that
@@ -28,6 +29,9 @@ export function reevaluateConnectionsForSystem(
   // vanishing means the wormhole collapsed. Used by sig deletion / overwrite-
   // paste; sig edits pass false and keep the old "clear the type" behaviour.
   breakOnOrphan = false,
+  // Called with a signature's id once its staged mass/life has been moved onto
+  // a connection, so the caller can clear the sig's copy.
+  onStagedConsumed?: (sigId: string) => void,
 ): void {
   const { map, updateConnection } = useMapStore.getState();
   const oldType  = oldSig?.whType?.toUpperCase();
@@ -99,7 +103,25 @@ export function reevaluateConnectionsForSystem(
           pinned.length === 1     ? pinned[0]     :
           pinned.length === 0 && backing.length === 1 ? backing[0] :
           undefined; // several plausible holes — ambiguous, leave it to the user
-        if (linkSig) patch[endField] = linkSig.id;
+        if (linkSig) {
+          patch[endField] = linkSig.id;
+          // Hand over anything the scout noted at the hole before it was
+          // jumped. Only fills gaps — a value already on the connection came
+          // from the other side or from someone flying it, either of which
+          // beats a staged observation. The sig's copy is cleared so there's
+          // one place holding the state from here on.
+          const staged = pendingWhState(linkSig);
+          if (staged) {
+            if (staged.massStatus && !conn.massStatus) patch.massStatus = staged.massStatus;
+            // Life is an expiry with the bucket derived from it, so hand the
+            // staged EOL over as an expiry — copying the bucket alone would be
+            // recomputed away seconds later.
+            if (staged.timeStatus && !conn.lifetimeExpiresAt) {
+              Object.assign(patch, lifePatch(staged.timeStatus, conn));
+            }
+            onStagedConsumed?.(linkSig.id);
+          }
+        }
       }
     } else if (oldBackedThis && !conn.broken) {
       // No sig backs the connection any more. If this sig used to back it:

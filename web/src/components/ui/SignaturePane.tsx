@@ -9,7 +9,8 @@ import { useShareMode } from '../../context/ShareModeContext';
 import { systemDisplayName } from '../../utils/systemName';
 import { useUserSetting } from '../../hooks/useUserSetting';
 import { usePopover } from '../../hooks/usePopover';
-import type { Signature, SigType } from '../../types';
+import type { Signature, SigType, MapConnection, MassStatus, TimeStatus } from '../../types';
+import { connectionForSig, effectiveWhState, lifePatch, LIFE_CYCLE } from '../../utils/whState';
 import { ConfirmModal } from './ConfirmModal';
 import { shouldSkipConfirm } from '../../utils/confirmPref';
 import { NotesEditor } from './NotesEditor';
@@ -169,14 +170,101 @@ function GhostTypeCell({ sig, isShareMode, onChange }: {
   );
 }
 
+/**
+ * Mass and life for a wormhole row, recordable before the hole is jumped.
+ *
+ * Writes to the CONNECTION when one backs this sig, so the far side's signature
+ * and the map edge show the same thing without anything being copied about.
+ * Before that it stages on the signature and is handed over when the connection
+ * appears. Two chips rather than two columns — the table is crowded enough.
+ */
+const MASS_CYCLE: Array<MassStatus | ''> = ['', 'destabilized', 'critical'];
+
+function WhStateCell({ sig, conn, whTypes, isShareMode, onChange }: {
+  sig:         Signature;
+  conn:        MapConnection | undefined;
+  whTypes:     ReturnType<typeof useWormholeTypes>;
+  isShareMode: boolean;
+  onChange:    (patch: { massStatus?: MassStatus | ''; timeStatus?: TimeStatus | '' }) => void;
+}) {
+  const { t } = useTranslation();
+  // Drive off the shared tick rather than the module's `tickNow` directly:
+  // that value only advances while something is subscribed, and the Age /
+  // Updated columns that normally do the subscribing can be hidden. Reading it
+  // unsubscribed froze the clock at page load, so a hole an hour from closing
+  // still measured as four hours out.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const fn = () => setTick((n) => n + 1);
+    tickSubs.add(fn);
+    startTickIfNeeded();
+    return () => {
+      tickSubs.delete(fn);
+      if (tickSubs.size === 0 && tickTimer) {
+        clearInterval(tickTimer);
+        tickTimer = null;
+      }
+    };
+  }, []);
+
+  if (sig.sigType !== 'wormhole') return null;
+
+  const state = effectiveWhState(sig, conn, whTypes, tickNow);
+  // EVE's own wording for the two reduced states — clearer than a symbol,
+  // and it matches what show-info tells you at the hole.
+  const massLabel = state.massStatus === 'critical' ? '<10%'
+                  : state.massStatus === 'destabilized' ? '<50%'
+                  : '\u2013';
+  const timeLabel = state.timeStatus === 'lessThan1h'  ? '<1h'
+                  : state.timeStatus === 'lessThan4h'  ? '<4h'
+                  : state.timeStatus === 'lessThan24h' ? '<24h'
+                  : state.timeStatus === 'expired'     ? '!'
+                  : '\u2013';
+
+  if (isShareMode) {
+    return (
+      <span className="sig-whstate">
+        <span className={`sig-whstate__chip sig-whstate__chip--mass-${state.massStatus || 'none'}`}>{massLabel}</span>
+        <span className={`sig-whstate__chip sig-whstate__chip--time-${state.timeStatus || 'none'}`}>{timeLabel}</span>
+      </span>
+    );
+  }
+
+  const cycle = <T,>(list: T[], current: T): T => list[(list.indexOf(current) + 1) % list.length];
+
+  return (
+    <span className="sig-whstate">
+      <button
+        type="button"
+        className={`sig-whstate__chip sig-whstate__chip--mass-${state.massStatus || 'none'}`}
+        onClick={() => onChange({ massStatus: cycle(MASS_CYCLE, state.massStatus) })}
+        title={t('signatures.whStateMass')}
+        aria-label={t('signatures.whStateMass')}
+      >
+        {massLabel}
+      </button>
+      <button
+        type="button"
+        className={`sig-whstate__chip sig-whstate__chip--time-${state.timeStatus || 'none'}`}
+        onClick={() => onChange({ timeStatus: cycle(LIFE_CYCLE, state.timeStatus) })}
+        title={t('signatures.whStateLife')}
+        aria-label={t('signatures.whStateLife')}
+      >
+        {timeLabel}
+      </button>
+    </span>
+  );
+}
+
 type SortCol = 'sigId' | 'sigType' | 'whType' | 'whLeadsTo' | 'name' | 'createdAt' | 'updatedAt';
-type ColKey  = 'id' | 'type' | 'whtype' | 'leadsto' | 'name' | 'safe' | 'notes' | 'created' | 'updated';
+type ColKey  = 'id' | 'type' | 'whtype' | 'leadsto' | 'whstate' | 'name' | 'safe' | 'notes' | 'created' | 'updated';
 
 const DEFAULT_WIDTHS: Record<ColKey, number> = {
   id:      72,
   type:    108,
   whtype:  170,
-  leadsto: 132,
+  leadsto: 190,
+  whstate: 104,
   name:    140,
   safe:    52,
   notes:   220,
@@ -197,6 +285,7 @@ const LEADSTO_MIN_WIDTH = 132;
 // stored as a list under one ui_settings key; empty (the default) = all shown,
 // so a later-added hideable column defaults visible without migration.
 const HIDEABLE_COLS = [
+  { key: 'whstate', labelKey: 'signatures.colWhState' },
   { key: 'name',    labelKey: 'signatures.colName' },
   { key: 'safe',    labelKey: 'signatures.colSafe' },
   { key: 'notes',   labelKey: 'signatures.colNotes' },
@@ -601,6 +690,30 @@ export function SignaturePane({ systemId }: { systemId: string }) {
       .catch(() => {});
   }, [sigRev, activeMapId, systemId, isShareMode]);
 
+  // Mass/life belong to the hole, so they go on the CONNECTION once one backs
+  // the sig — that's what keeps this sig, the one on the far side and the map
+  // edge showing the same thing. Until then they stage on the signature.
+  const setWhState = (
+    sig: Signature,
+    patch: { massStatus?: MassStatus | ''; timeStatus?: TimeStatus | '' },
+  ) => {
+    const conn = connectionForSig(sig.id, mapConnections);
+    if (conn) {
+      const { updateConnection } = useMapStore.getState();
+      updateConnection(conn.id, {
+        // The connection spells "nothing noted" as stable/fresh; the sig cell
+        // spells it blank. Translate rather than storing a third vocabulary.
+        ...(patch.massStatus !== undefined ? { massStatus: patch.massStatus || 'stable' } : {}),
+        // A hole's life is tracked as an EXPIRY; timeStatus is derived from it.
+        // Setting the bucket on its own is recomputed away within seconds, which
+        // is why marking EOL used to come back as "< 1 day".
+        ...(patch.timeStatus !== undefined ? lifePatch(patch.timeStatus, conn, whTypes) : {}),
+      });
+      return;
+    }
+    updateSig(sig.id, patch as Partial<Signature>);
+  };
+
   const updateSig = (id: string, updates: Partial<Signature>) => {
     const existing = sigsRef.current.find((s) => s.id === id);
     const withTs = { ...updates, updatedAt: new Date().toISOString() };
@@ -623,7 +736,11 @@ export function SignaturePane({ systemId }: { systemId: string }) {
     // the only backing sig.
     if ('whType' in updates || 'whLeadsTo' in updates) {
       const nextSigs = sigsRef.current.map((s) => (s.id === id ? { ...s, ...updates } : s));
-      reevaluateConnectionsForSystem(systemId, nextSigs, existing);
+      // Clearing the staged copy once a connection has taken it over keeps a
+      // single source of truth; without it the sig would quietly disagree with
+      // the connection the moment either side changed.
+      reevaluateConnectionsForSystem(systemId, nextSigs, existing, false, (sigRowId) =>
+        updateSig(sigRowId, { massStatus: '', timeStatus: '' }));
     }
 
     pendingUpdates.current.set(id, { ...(pendingUpdates.current.get(id) ?? {}), ...updates });
@@ -670,8 +787,6 @@ export function SignaturePane({ systemId }: { systemId: string }) {
         const t = conn.type?.toUpperCase();
         if (t && t !== 'K162') { source = conn.type; break; }
       }
-      // Deliberate: clears this pane's own state when the record it shows changes.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (source) updateSig(sig.id, { notes: source });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1096,6 +1211,7 @@ export function SignaturePane({ systemId }: { systemId: string }) {
             <col style={{ width: colWidths.id }} />
             <col style={{ width: colWidths.type }} />
             <col style={{ width: colWidths.whtype }} className="sig-col--whtype" />
+            {isColVisible('whstate') && <col style={{ width: colWidths.whstate }} />}
             <col style={{ width: colWidths.leadsto }} />
             {!isShareMode && <col className="sig-col--bookmark" />}
             {isColVisible('name')    && <col style={{ width: colWidths.name }} />}
@@ -1130,6 +1246,12 @@ export function SignaturePane({ systemId }: { systemId: string }) {
                 {t('signatures.colWh')}{sortInd('whType')}
                 <div className="sig-th__resize" onMouseDown={(e) => startResize('whtype', e)} />
               </th>
+              {isColVisible('whstate') && (
+                <th className="sig-th" title={t('signatures.colWhStateHint')}>
+                  {t('signatures.colWhState')}
+                  <div className="sig-th__resize" onMouseDown={(e) => startResize('whstate', e)} />
+                </th>
+              )}
               <th className="sig-th sig-th--sortable" onClick={() => handleSort('whLeadsTo')}>
                 {t('signatures.colLeadsTo')}{sortInd('whLeadsTo')}
                 <div className="sig-th__resize" onMouseDown={(e) => startResize('leadsto', e)} />
@@ -1254,6 +1376,17 @@ export function SignaturePane({ systemId }: { systemId: string }) {
                     />
                   )}
                 </td>
+                {isColVisible('whstate') && (
+                  <td className="sig-td--whstate">
+                    <WhStateCell
+                      sig={sig}
+                      conn={connectionForSig(sig.id, mapConnections)}
+                      whTypes={whTypes}
+                      isShareMode={isShareMode}
+                      onChange={(patch) => setWhState(sig, patch)}
+                    />
+                  </td>
+                )}
                 <td className="sig-td--wh">
                   {sig.sigType === 'wormhole' && (
                     isShareMode

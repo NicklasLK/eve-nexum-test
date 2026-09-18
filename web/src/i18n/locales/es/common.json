@@ -1362,7 +1362,7 @@
     "collapseAction": "Agujeros muertos",
     "collapseActionBreak": "Marcar la conexión como rota",
     "collapseActionDisconnect": "Quitar la conexión",
-    "collapseActionHint": "Qué ocurre con una conexión cuando su vida útil se agota y pasa el margen. Marcarla como rota la mantiene en el mapa para volver a escanear. Quitarla elimina la conexión. Quitar también los sistemas aislados elimina además todos los sistemas que quedan sin ruta de vuelta al sistema base, salvo el base, los sistemas bloqueados y cualquier sistema en el que esté ahora mismo alguien que ve el mapa. Se ejecuta en el servidor y no se puede deshacer.",
+    "collapseActionHint": "Qué ocurre con una conexión cuando su vida útil se agota y pasa el margen. Marcarla como rota la mantiene en el mapa, atenuada, para volver a escanear; si nadie la restaura en unas horas (tres por defecto, según el servidor) también se elimina. Quitarla elimina la conexión. Quitar también los sistemas aislados elimina además todos los sistemas que quedan sin ruta de vuelta al sistema base, salvo el base, los sistemas bloqueados y cualquier sistema en el que esté ahora mismo alguien que ve el mapa. Se ejecuta en el servidor y no se puede deshacer.",
     "collapseActionPrune": "Quitar la conexión y los sistemas aislados",
     "collapseGrace": "Margen de colapso",
     "collapseGraceHint": "Cuánto espera un agujero de gusano expirado antes de cortarse y eliminar sus firmas.",
@@ -1464,10 +1464,12 @@
     "notifWatchlist": "Coincidencia de lista de seguimiento",
     "notifExits": "Salidas a k-space",
     "notifExitsMinSec": "Avisar de salidas de",
+    "notifExitsOff": "Desactivado — no avisar nunca",
     "notifExitsHiSec": "Solo alta seguridad",
     "notifExitsLowSec": "Baja seguridad o mejor",
     "notifExitsAny": "Cualquier k-space",
     "notifExitsHint": "Avisa una vez cuando aparece en la cadena una salida con al menos esta seguridad. Desactivado por defecto.",
+    "notifVolume": "Volumen de alertas — {{pct}} %",
     "openOptions": "Opciones de mapa",
     "optimizeConnections": "⟳ Optimizar conexiones",
     "panelBelow": "Debajo del mapa",
@@ -1740,7 +1742,11 @@
     "resize": "Redimensionar barra lateral",
     "collapse": "Plegar barra lateral",
     "moveToLeft": "Mover barra lateral a la izquierda",
-    "moveToRight": "Mover barra lateral a la derecha"
+    "moveToRight": "Mover barra lateral a la derecha",
+    "panelsTitle": "Secciones de la barra lateral",
+    "panelsHint": "Elige qué secciones aparecen en la barra lateral. Las ocultas conservan su posición y vuelven a ella al reactivarlas.",
+    "panelsAllHidden": "Todas las secciones están ocultas: la barra lateral quedará vacía.",
+    "emptyTitle": "No se muestra ninguna sección. Elige aquí las que quieras."
   },
   "sigType": {
     "combat": "Combate",
@@ -1784,6 +1790,10 @@
     "colType": "Grupo",
     "colWh": "Tipo",
     "colLeadsTo": "Lleva a",
+    "colWhState": "Estado",
+    "colWhStateHint": "Masa y vida restante del agujero. Ambas se leen en el propio agujero, así que pueden fijarse antes de saltarlo.",
+    "whStateMass": "Masa: clic para ciclar completa / menos del 50 % / menos del 10 %",
+    "whStateLife": "Vida: clic para ciclar desconocida / menos de 1 día / menos de 4 horas / menos de 1 hora",
     "colName": "Nombre",
     "colNotes": "Notas",
     "colAge": "Antigüedad",
@@ -1885,7 +1895,9 @@
     "standingsNotLoaded": "Standings aún no cargados. Si esto persiste, cierra sesión y vuelve a entrar para conceder los scopes read_contacts.",
     "standingNotInBucket": "{{label}}: no estás en ninguno",
     "standingNotSet": "{{label}}: sin standing establecido",
-    "standingValue": "{{label}}: {{value}}"
+    "standingValue": "{{label}}: {{value}}",
+    "panesTitle": "Paneles",
+    "panesHint": "Elige qué paneles aparecen abajo. Los ocultos conservan su posición y vuelven a ella al reactivarlos."
   },
   "time": {
     "justNow": "ahora mismo",
