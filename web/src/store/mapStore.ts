@@ -222,6 +222,19 @@ interface MapStore {
   /** Docked panel beside the map (column layout) rather than beneath it. */
   panelSideBySide: boolean;
   setPanelSideBySide: (v: boolean) => void;
+  // Map settings dialog. The button sits in the toolbar with the rest of the
+  // pilot's controls, while the dialog itself is rendered by MapSidebar (where
+  // the settings it edits live), so the open state is shared here rather than
+  // hoisting a 100-line dialog out of the component that owns it. Ephemeral —
+  // never persisted.
+  mapSettingsOpen: boolean;
+  setMapSettingsOpen: (v: boolean) => void;
+  // "Connect to system" staging: the system a connection is being drawn FROM
+  // via the context menu, waiting for its target to be clicked. Dragging
+  // between handles is unaffected — this is the pick-two-systems alternative.
+  // Ephemeral; never persisted.
+  connectSourceId: string | null;
+  setConnectSource: (id: string | null) => void;
   showMinimap: boolean;
   uniformSize: boolean;
   showStatics: boolean;
@@ -590,6 +603,10 @@ export const useMapStore = create<MapStore>()((set, get) => {
     compactMode: false,
     panelSideBySide: readUserSetting<boolean>('nexum.panelSideBySide', false),
     setPanelSideBySide: (v) => { writeUserSetting('nexum.panelSideBySide', v); set({ panelSideBySide: v }); },
+    mapSettingsOpen: false,
+    setMapSettingsOpen: (v) => set({ mapSettingsOpen: v }),
+    connectSourceId: null,
+    setConnectSource: (id) => set({ connectSourceId: id }),
     showMinimap: true,
     uniformSize: true,
     showStatics: true,

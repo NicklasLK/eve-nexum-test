@@ -305,9 +305,11 @@ function formatDelay(sec: number): string {
 // Order the type-filter chips most-useful-first. Covers every SigType.
 const SIG_TYPE_FILTER_ORDER: SigType[] = ['wormhole', 'data', 'relic', 'gas', 'ore', 'combat', 'ghost', 'unknown'];
 
-// Signature-type Select options, alphabetical by label. Used for both the
-// per-row type picker and the bulk "set type" dropdown.
-const SIG_TYPE_OPTIONS: SigType[] = ['combat', 'data', 'gas', 'ghost', 'ore', 'relic', 'unknown', 'wormhole'];
+// Signature-type Select options. Wormhole leads because it is far and away the
+// most common thing anyone picks here; the rest follow in label order (which
+// holds for English — the labels are translated, the order isn't). Used for
+// both the per-row type picker and the bulk "set type" dropdown.
+const SIG_TYPE_OPTIONS: SigType[] = ['wormhole', 'combat', 'data', 'gas', 'ghost', 'ore', 'relic', 'unknown'];
 
 // Relic/data site safety, keyed on the first word of the scanned site name (per
 // the site-safety table). "Safe" sites have no NPCs; "not safe" ones can spawn
@@ -566,13 +568,28 @@ export function SignaturePane({ systemId }: { systemId: string }) {
   // type (the static map only covers k-space statics).
   const whTypes = useWormholeTypes();
 
+  // Class of every system on the map, by name. A solved hole's leads-to IS a
+  // system name, so this is what keeps {dest_type} filled after the jump.
+  const classBySystemName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const sys of mapSystems) {
+      // 'unknown' is the placeholder-node class (an unmapped destination) — as
+      // a bookmark it would read worse than leaving the token empty.
+      if (sys.name && sys.systemClass && sys.systemClass !== 'unknown') {
+        m.set(sys.name.trim().toUpperCase(), sys.systemClass);
+      }
+    }
+    return m;
+  }, [mapSystems]);
+
   const copyBookmark = useCallback((sig: Signature) => {
-    const name = formatBookmarkName(bookmarkFormat, sig, whTypes);
+    const name = formatBookmarkName(bookmarkFormat, sig, whTypes, Date.now(),
+      (n) => classBySystemName.get(n.trim().toUpperCase()) ?? null);
     if (!name) return;
     navigator.clipboard.writeText(name)
       .then(() => toast.success(t('signatures.bookmarkCopied', { name })))
       .catch(() => toast.error(t('signatures.bookmarkCopyFailed')));
-  }, [bookmarkFormat, whTypes, t]);
+  }, [bookmarkFormat, whTypes, classBySystemName, t]);
 
   const copySiteBookmark = useCallback((sig: Signature) => {
     const name = formatSiteBookmarkName(siteBookmarkFormat, sig);

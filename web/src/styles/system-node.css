@@ -14,6 +14,16 @@
   filter: none;
 }
 
+/* Fading the card with `opacity` also makes it see-through, so an edge routed
+   BEHIND a stale system was visible straight through the node — a jump-range
+   line reading as though it passed through the middle of the card. The
+   wrapper is not faded, so it carries an opaque fill of the same shape for the
+   card to sit on. Radius matches .system-node. */
+.react-flow__node:has(> .system-node--stale) {
+  background: var(--surface-panel);
+  border-radius: 8px;
+}
+
 /* Content filter (map-wide spotlight): systems whose scanned content doesn't
    match the active filter fade right back; matches stay lit with a soft accent
    ring so they pop against the dimmed map. Hovering a faded node restores it. */
@@ -200,6 +210,14 @@
     border-style: dashed;
     box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.4), 0 0 18px rgba(56, 189, 248, 0.3);
   }
+
+  /* The system a menu-staged connection is being drawn FROM. Solid where the
+     candidates are dashed, so it reads as the fixed end of the pair. */
+  &.system-node--connect-source {
+    border-color: #38bdf8;
+    border-style: solid;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.75), 0 0 22px rgba(56, 189, 248, 0.45);
+  }
 }
 
 /* Unknown placeholder node (unmapped wormhole) — a clear red outline so it reads
@@ -239,6 +257,15 @@
   align-items: center;
   gap: 6px;
   margin-bottom: 4px;
+}
+
+/* Easy connect puts a drag grip in the top-right corner, which is where the
+   header's right-hand icons (the sov logo) already sit — the grip drew straight
+   over them. Reserve the corner in the row instead, so the icons shuffle left
+   rather than stacking. The grip spans 8..32px from the card's right edge and
+   the card is padded 12px, so 22px clears it with a little air. */
+.system-node--easy .system-node__header {
+  padding-right: 22px;
 }
 
 .system-node__meta-row {

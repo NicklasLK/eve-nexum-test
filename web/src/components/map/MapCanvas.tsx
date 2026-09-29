@@ -278,6 +278,8 @@ export function MapCanvas() {
   const [labelDialogFor, setLabelDialogFor] = useState<string | null>(null);
   const [aliasDialogFor, setAliasDialogFor] = useState<string | null>(null);
   const [contextMenu, setContextMenu]         = useState<CtxMenu | null>(null);
+  const connectSourceId  = useMapStore((s) => s.connectSourceId);
+  const setConnectSource = useMapStore((s) => s.setConnectSource);
   // Pending "remove orphan systems" sweep, held while the confirm modal is up.
   const [orphanConfirm, setOrphanConfirm]     = useState<{ ids: string[] } | null>(null);
   // Pending "remove systems with no route home" sweep, held while its confirm is up.
@@ -491,6 +493,13 @@ export function MapCanvas() {
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
         e.preventDefault();
         undo().catch(console.error);
+        return;
+      }
+
+      // Escape abandons a staged "Connect to system" — the map is otherwise
+      // waiting for a click the user may no longer want to make.
+      if (e.key === 'Escape' && useMapStore.getState().connectSourceId) {
+        useMapStore.getState().setConnectSource(null);
         return;
       }
 
@@ -712,14 +721,21 @@ export function MapCanvas() {
   // trying to out-argue React Flow's internal re-fit bookkeeping. Captured in a
   // layout effect (before the browser paints the new size) and reasserted for
   // the length of the re-fit animation, so the viewport simply never moves.
-  const panelOpen = selectedSystemId != null || selectedConnectionId != null;
-  const prevPanelOpen = useRef(panelOpen);
-  const heldForMapId  = useRef(activeMapId);
+  // Keyed on WHICH panel is showing, not merely whether one is. The connection
+  // panel and the system panel share a slot and are wildly different heights —
+  // a gate's panel is ~44px against a system's ~256px — so swapping between
+  // them resizes the map as much as opening one does. A boolean missed that:
+  // selecting a link and then a system kept it `true` throughout, the hold
+  // never armed, and the map re-fitted to the whole chain. Switching between
+  // two systems can resize too, and is covered by the same key.
+  const panelKey = `${selectedSystemId ?? ''}|${selectedConnectionId ?? ''}`;
+  const prevPanelKey = useRef(panelKey);
+  const heldForMapId = useRef(activeMapId);
   useLayoutEffect(() => {
     const mapChanged = heldForMapId.current !== activeMapId;
     heldForMapId.current = activeMapId;
-    if (panelOpen === prevPanelOpen.current) return;
-    prevPanelOpen.current = panelOpen;
+    if (panelKey === prevPanelKey.current) return;
+    prevPanelKey.current = panelKey;
     // Switching maps clears the selection, so the panel closes in the same tick
     // — but that map genuinely needs fitting to. Hold only when the panel is the
     // only thing that moved.
@@ -734,7 +750,7 @@ export function MapCanvas() {
       if (++frames < VIEWPORT_HOLD_FRAMES) raf = requestAnimationFrame(hold);
     });
     return () => cancelAnimationFrame(raf);
-  }, [panelOpen, activeMapId, getViewport, setViewport]);
+  }, [panelKey, activeMapId, getViewport, setViewport]);
 
   // Sweep expired EOL connections every minute. A connection is considered
   // expired 4 h + 30 min grace after the user marked it EOL. The 30 min grace
@@ -1021,7 +1037,33 @@ export function MapCanvas() {
     [selectConnection],
   );
 
-  const onPaneClick = useCallback(() => setContextMenu(null), []);
+  // Second half of "Connect to system": with a source staged, the next node
+  // clicked is the target. Same handle-picking as a dragged connection, so the
+  // two routes produce identical edges. Clicking the source again cancels —
+  // a system can't connect to itself, and that's the nearest gesture to "oops".
+  const onNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      if (!connectSourceId) return;
+      if (node.id === connectSourceId) { setConnectSource(null); return; }
+      const src = systems.find((s) => s.id === connectSourceId);
+      const tgt = systems.find((s) => s.id === node.id);
+      if (src && tgt) {
+        const { sourceHandle, targetHandle } = pickHandles(src.position, tgt.position);
+        addConnection(src.id, tgt.id, sourceHandle, targetHandle);
+        toast.success(i18n.t('ctxMenu.connectToDone', {
+          from: systemDisplayName(src), to: systemDisplayName(tgt),
+        }));
+      }
+      setConnectSource(null);
+    },
+    [connectSourceId, setConnectSource, systems, addConnection],
+  );
+
+  // Clicking empty space abandons a staged connect as well as closing the menu.
+  const onPaneClick = useCallback(() => {
+    setContextMenu(null);
+    setConnectSource(null);
+  }, [setConnectSource]);
 
   const ctxItems = (() => {
     if (!contextMenu) return [];
@@ -1260,6 +1302,21 @@ export function MapCanvas() {
           label: t("ctxMenu.markCleared", { count: selectedNodes.length }),
           icon: <CheckIcon size={16} weight="regular" />,
           action: () => selectedNodes.forEach((n) => updateSystem(n.id, { status: 'cleared' })),
+        },
+      ] : [];
+
+      // Draw a connection by picking two systems instead of dragging between
+      // handles: this stages the source, and the next node clicked becomes the
+      // target. Single selection only — the target is what the next click
+      // means, so a multi-select source has no sensible reading.
+      const connectItem = !multiSelected ? [
+        {
+          label: t('ctxMenu.connectTo'),
+          icon: <LinkSimpleIcon size={16} weight="regular" color="#5a9af8" />,
+          action: () => {
+            setConnectSource(contextMenu.nodeId!);
+            toast.info(t('ctxMenu.connectToHint', { system: sys?.alias || sys?.name || '' }));
+          },
         },
       ] : [];
 
@@ -1506,6 +1563,7 @@ export function MapCanvas() {
             }
           },
         }] : []),
+        ...connectItem,
         ...homeItem,
         ...aliasItem,
         ...tagItem,
@@ -1627,6 +1685,7 @@ export function MapCanvas() {
         onEdgeClick={onEdgeClick}
         proOptions={{ hideAttribution: true }}
         onSelectionContextMenu={onSelectionContextMenu}
+        onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
         onSelectionChange={onSelectionChange}
         nodeTypes={NODE_TYPES}

@@ -24,6 +24,7 @@
   - [Docker (recommended)](#option-1--docker-recommended)
   - [Local development](#option-2--local-development)
   - [EVE developer app scopes](#eve-developer-app-scopes)
+  - [Pre-built images](#pre-built-images)
   - [One-command deploy scripts](#one-command-deploy-scripts)
   - [Updating the SDE](#updating-the-sde)
   - [Refreshing wormhole types](#refreshing-wormhole-types)
@@ -328,6 +329,7 @@ Edit `.env` and fill in the required values:
 | `EVE_CALLBACK_URL` | Yes | Must match the callback registered in your EVE app — e.g. `https://yourdomain.com/auth/callback` |
 | `FRONTEND_URL` | Yes | Public URL of the app — e.g. `https://yourdomain.com` |
 | `DOMAIN` | Traefik only | Bare hostname for the Traefik router rule — e.g. `nexum.yourdomain.com` |
+| `TRUST_PROXY` | When proxied | How many reverse proxies sit in front of the app. Express uses it to pick the client's address out of `X-Forwarded-For`, and the per-IP rate limits are bucketed on that address — **set it too low and every request looks like it came from your proxy, so a single shared bucket rate-limits your whole instance**. `1` (default) for the plain compose (nginx → server); **`2` when running behind Traefik** (Traefik → nginx → server); add one for each further proxy, e.g. `3` behind Cloudflare as well. |
 | `CORP_ID` | Optional | Restricts logins to specific EVE corporations. **Comma-separated list** of corporation IDs — anyone whose corp is not admitted is rejected at the OAuth callback (unless their alliance is in `ALLIANCE_ID`). Leave empty/unset to allow any EVE character to log in. Example single corp: `98000001`. Example multi-corp: `98000001,98000002`. **On boot this list _seeds_ the login allow-list** (see [Admitting friends without editing `.env`](#admitting-friends-without-editing-env)): the env-seeded entries are the immutable "core" — additional corps, alliances, or individual characters are admitted live from the admin area without editing `.env` or restarting. Removing a corp from `CORP_ID` removes its core entry on the next boot. |
 | `ALLIANCE_ID` | Optional | Restricts logins to specific EVE alliances, and adds the **alliance map** scope. **Comma-separated list** of alliance IDs. A character is admitted if their corp is in `CORP_ID` **or** their alliance is in `ALLIANCE_ID`, so a whole alliance can be permitted without listing every member corp. Like `CORP_ID`, this seeds the immutable core of the login allow-list. The list also forms the coalition for `ALLIANCE_MAP_SHARED`. Example: `99000001` or `99000001,99000002`. |
 | `ADMIN_CHAR_ID` | When `CORP_ID` or `ALLIANCE_ID` is set | EVE character ID of the bootstrap admin. Forced to the top role on first login (`alliance_admin` when `ALLIANCE_ID` is set, otherwise `admin`) and cannot be demoted or blocked by other admins. **Not a membership exemption** — this character still has to be in a listed corp or alliance to log in. See [What happens when a user leaves the corp](#what-happens-when-a-user-leaves-the-corp). |
@@ -415,6 +417,123 @@ Things worth knowing before you turn it on:
   the admin page says so. Watch it: ESI only keeps 30 days, so a reader left broken for
   longer than that loses those donations permanently.
 
+#### Pre-built images
+
+Each release publishes two images to GitHub Container Registry, so you can run a
+tagged build instead of pulling the repo and compiling it yourself:
+
+```
+ghcr.io/gquantrill/nexum-server
+ghcr.io/gquantrill/nexum-web
+```
+
+Two images cover all three app services — the `importer` is the server image run
+with a different command, and Postgres comes from upstream.
+
+Both are named in `docker-compose.yml` alongside the existing `build:` blocks, so
+the same file serves either habit:
+
+```bash
+# Run published images (no repo build)
+docker compose pull
+docker compose up -d
+
+# Build from source, exactly as before
+docker compose build
+docker compose up -d
+```
+
+Pin a version with `NEXUM_TAG` in your `.env` — unset means `latest`:
+
+```bash
+NEXUM_TAG=4.8.0
+```
+
+Each release is tagged three ways: the exact version (`4.8.0`), the minor series
+(`4.8`), and `latest`.
+
+##### There is no importer image — it is the server image
+
+Three app services, two images. The `importer` runs the **same** image as the
+server, started with a different command:
+
+```yaml
+importer:
+  image: ghcr.io/gquantrill/nexum-server:${NEXUM_TAG:-latest}
+  command: ["node", "dist/scripts/setup-db.js"]   # overrides the image's CMD
+
+server:
+  image: ghcr.io/gquantrill/nexum-server:${NEXUM_TAG:-latest}
+  # image CMD: node dist/src/index.js
+```
+
+The importer script is compiled into the same `dist/` the image already ships
+(`tsconfig.json` includes `scripts`), so no second build is needed. Keeping them
+as one image also means the two halves can't drift: the importer creates the SDE
+schema the server boots against, and sharing an image makes it impossible to
+release one without the other.
+
+**This matters if you write your own compose file rather than using ours.** The
+`command:` override is not optional — without it the importer starts a second
+API server, never exits, and the real server waits on it forever, because it
+depends on that container *completing*:
+
+```yaml
+depends_on:
+  importer:
+    condition: service_completed_successfully
+```
+
+A stack that hangs at startup with a healthy Postgres and two idle server
+containers is this mistake.
+
+##### What you should know before relying on them
+
+These are the trade-offs that come with a pre-built image rather than your own
+build. None of them are bugs; they're consequences of deciding things at build
+time instead of yours.
+
+- **No analytics are baked in.** The optional Google Tag Manager ID is a *build
+  argument* that Vite inlines, so an image built with it set would report to
+  whoever built it. The publish workflow deliberately never passes it, and the
+  published images therefore contain no GTM container at all. If you want
+  analytics on your own deployment, you have to build the image yourself with
+  `VITE_GTM_ID` set. See [Frontend analytics](#frontend-analytics-google-tag-manager--off-by-default).
+
+- **The voice announcer model is fixed at `q8`, and it dominates the image
+  size.** The weights are downloaded into the web image at build time and the
+  precision is inlined by Vite, so a published image can only carry one. At the
+  `q8` default that is ~88 MB of weights, ~116 MB of model assets all in, out of
+  a ~238 MB web image — most of what you pull is the announcer. (The server
+  image is ~354 MB.) If you want `fp16` (~163 MB of weights) or `fp32` (~326 MB),
+  build the web image yourself with `ANNOUNCER_DTYPE` set; there is no runtime
+  switch.
+
+- **`linux/amd64` only.** There are no arm64 images yet. Building arm64 in CI
+  would mean QEMU emulation, and the web image emulates badly — a yarn install, a
+  Vite build and the model download, all interpreted. On a Pi or an ARM NAS,
+  build from source for now. If you want arm64 published, say so in an issue;
+  it's a question of build minutes, not feasibility.
+
+- **Watchtower: use notification mode, not auto-update.** The server applies
+  database migrations on start. Letting Watchtower pull and restart unattended
+  means a new schema is applied with nobody watching, and a rollback to the
+  previous image is then *not* automatically safe — the old code may not
+  understand the new schema. Point Watchtower at the tag and have it tell you a
+  version is available; do the upgrade yourself, after a
+  [backup](#backup--restore).
+
+- **`docker compose up` will not silently switch you between the two.** Compose
+  uses a locally built image when one exists and only fetches when it doesn't, so
+  an existing source-built deployment keeps building. `docker compose pull` is
+  the explicit "give me the published image" step; `docker compose build` is the
+  explicit opposite. If you have been building locally and want to switch, pull
+  and then recreate the containers.
+
+- **The published images are the released code, not `main`.** The workflow checks
+  out the release tag rather than whatever `main` is at when it runs, so an image
+  matches its version even if `main` has moved on.
+
 #### One-command deploy scripts
 
 Not comfortable with Docker commands? The repo ships small scripts that run the whole **pull → build → restart** cycle for you, so both first setup and later updates are a single command from the repo root — no need to remember the `docker compose` lines below.
@@ -463,6 +582,13 @@ To front the stack with Traefik for TLS and a public URL, add `DOMAIN=nexum.your
 docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
 ```
 Traefik will handle TLS termination and HTTP→HTTPS redirects. The `docker-compose.traefik.yml` overlay assumes a Traefik network named `traefik-public` and a cert resolver named `letsencrypt`.
+
+> **Set `TRUST_PROXY=2` when you add Traefik.** It puts a second proxy in front
+> of the app (Traefik → nginx → server), and the server has to be told, because
+> the count decides which `X-Forwarded-For` entry is read as the client. Leave it
+> at the default of `1` and every request resolves to Traefik's own address —
+> so instead of a rate limit per user you get one bucket shared by everyone on
+> the instance, and a busy evening starts returning `429` to all of them.
 
 > **Tip — avoid retyping the overlay.** Every `docker compose ...` command below uses the standard form. If you run with the Traefik overlay, either prefix each command with `-f docker-compose.yml -f docker-compose.traefik.yml`, or set it once per shell session:
 > ```bash

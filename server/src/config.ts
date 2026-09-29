@@ -37,6 +37,18 @@ const ADMIN_CHAR_ID = process.env.ADMIN_CHAR_ID ? parseInt(process.env.ADMIN_CHA
 const REPORTS_CHAR_ID = process.env.RV_REPORT_ID ? parseInt(process.env.RV_REPORT_ID, 10) : null;
 const CORP_MAP_TIME = parseInt(process.env.CORP_MAP_TIME ?? '30', 10);
 
+// How many reverse proxies sit in front of the app, for Express's `trust proxy`.
+// It decides which X-Forwarded-For entry is taken as the client, so getting it
+// wrong is not cosmetic: too low and every request resolves to a proxy's own
+// address, collapsing all IP-keyed rate limits into one shared bucket.
+//   1 = the shipped compose (nginx -> server)
+//   2 = behind Traefik as well (Traefik -> nginx -> server)
+// Raise it by one for each additional proxy you put in front.
+// TRUST_PROXY_HOPS is the name this fork shipped first (and what the Sliplane
+// deployment still sets); TRUST_PROXY is the upstream name and wins when both are set.
+const TRUST_PROXY_RAW = parseInt(process.env.TRUST_PROXY ?? process.env.TRUST_PROXY_HOPS ?? '1', 10);
+const TRUST_PROXY = Number.isInteger(TRUST_PROXY_RAW) && TRUST_PROXY_RAW >= 0 ? TRUST_PROXY_RAW : 1;
+
 // Role a NEW user is created with on a restricted (corp/alliance) instance.
 // Existing users keep whatever role they already have. Deliberately limited to
 // the non-admin tiers ('readonly' | 'contributor' | 'edit' | 'full') so a deployment can
@@ -179,6 +191,7 @@ export const config = {
   defaultUserRole:     DEFAULT_USER_ROLE,
   reportsCharId:       REPORTS_CHAR_ID && Number.isInteger(REPORTS_CHAR_ID) && REPORTS_CHAR_ID > 0 ? REPORTS_CHAR_ID : null,
   corpMapExpireDays:   CORP_MAP_TIME,
+  trustProxy:          TRUST_PROXY,
   maxUserMaps:         parseInt(process.env.MAX_USER_MAPS ?? '5', 10),
   maxCorpMaps:         parseInt(process.env.MAX_CORP_MAPS ?? '5', 10),
   maxAllianceMaps:     parseInt(process.env.MAX_ALLIANCE_MAPS ?? '5', 10),

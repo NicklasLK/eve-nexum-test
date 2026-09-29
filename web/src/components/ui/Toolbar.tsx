@@ -40,6 +40,7 @@ import {
   ChartBarIcon,
   ClockCountdownIcon,
   ColumnsIcon,
+  GearIcon,
   DotsSixVerticalIcon,
   FootprintsIcon,
   GraphIcon,
@@ -242,6 +243,7 @@ export function Toolbar() {
   const iskMapsEnabled  = useMapStore((s) => s.iskMapsEnabled);
   const panelSideBySide = useMapStore((s) => s.panelSideBySide);
   const setPanelSideBySide = useMapStore((s) => s.setPanelSideBySide);
+  const setMapSettingsOpen = useMapStore((s) => s.setMapSettingsOpen);
   const maxCorpMaps     = useMapStore((s) => s.maxCorpMaps);
   const corpMapCount    = useMapStore((s) => s.corpMapCount);
   const maxAllianceMaps  = useMapStore((s) => s.maxAllianceMaps);
@@ -563,25 +565,6 @@ export function Toolbar() {
     // All the explicit action buttons travel together as one movable block.
     tools: (
       <div className="toolbar__group">
-        {showAdmin && (
-          <button
-            className="toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent"
-            onClick={() => { window.location.hash = '#/admin/users'; }}
-            data-tooltip={t('toolbar.admin')}
-            aria-label={t('toolbar.admin')}
-          >
-            <ShieldStarIcon size={18} weight="regular" />
-          </button>
-        )}
-        <button
-          className="toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent"
-          onClick={() => setShowStats(true)}
-          data-tooltip={t('toolbar.userStats')}
-          aria-label={t('toolbar.userStats')}
-        >
-          <ChartBarIcon size={18} weight="regular" />
-        </button>
-
         <a
           className="toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent"
           href="/help/"
@@ -649,15 +632,6 @@ export function Toolbar() {
         {/* Layout switch. Lives here rather than in the sidebar's display
             options: those are set once, whereas people flip this back and
             forth while deciding which layout suits them. */}
-        <button
-          className={`toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent${panelSideBySide ? ' toolbar__toggle--on' : ''}`}
-          onClick={() => setPanelSideBySide(!panelSideBySide)}
-          aria-pressed={panelSideBySide}
-          data-tooltip={panelSideBySide ? t('toolbar.layoutBesideTooltip') : t('toolbar.layoutBelowTooltip')}
-          aria-label={t('mapSidebar.panelLayout')}
-        >
-          <ColumnsIcon size={18} weight="regular" />
-        </button>
 
         <HeatmapMenu />
 
@@ -671,18 +645,6 @@ export function Toolbar() {
           <SlidersHorizontalIcon size={18} weight="regular" />
         </button>
 
-        <button
-          className={`toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent${trackJumps ? ' toolbar__toggle--on' : ''}`}
-          onClick={() => setTrackJumps(!trackJumps)}
-          aria-pressed={trackJumps}
-          aria-label={trackJumps ? t('toolbar.trackJumpsOn') : t('toolbar.trackJumpsOff')}
-          data-tooltip={trackJumps
-            ? t('toolbar.trackJumpsTooltipOn')
-            : t('toolbar.trackJumpsTooltipOff')}
-        >
-          <FootprintsIcon size={18} weight="regular" />
-          <span className={`toolbar__toggle-led${trackJumps ? ' toolbar__toggle-led--on' : ' toolbar__toggle-led--off'}`} />
-        </button>
       </div>
     ),
 
@@ -792,6 +754,56 @@ export function Toolbar() {
     // Language, API keys and sign-out travel together as one movable block.
     actions: user ? (
       <div className="toolbar__group">
+        {/* Everything about the PILOT lives here — who they are, what they can
+            reach, and how they want the app arranged — leaving the other group
+            for tools that act on the open map. */}
+        {showAdmin && (
+          <button
+            className="toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent"
+            onClick={() => { window.location.hash = '#/admin/users'; }}
+            data-tooltip={t('toolbar.admin')}
+            aria-label={t('toolbar.admin')}
+          >
+            <ShieldStarIcon size={18} weight="regular" />
+          </button>
+        )}
+        <button
+          className="toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent"
+          onClick={() => setShowStats(true)}
+          data-tooltip={t('toolbar.userStats')}
+          aria-label={t('toolbar.userStats')}
+        >
+          <ChartBarIcon size={18} weight="regular" />
+        </button>
+        <button
+          className="toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent"
+          onClick={() => setMapSettingsOpen(true)}
+          data-tooltip={t('mapSidebar.settings')}
+          aria-label={t('mapSidebar.settings')}
+        >
+          <GearIcon size={18} weight="regular" />
+        </button>
+        <button
+          className={`toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent${panelSideBySide ? ' toolbar__toggle--on' : ''}`}
+          onClick={() => setPanelSideBySide(!panelSideBySide)}
+          aria-pressed={panelSideBySide}
+          data-tooltip={panelSideBySide ? t('toolbar.layoutBesideTooltip') : t('toolbar.layoutBelowTooltip')}
+          aria-label={t('mapSidebar.panelLayout')}
+        >
+          <ColumnsIcon size={18} weight="regular" />
+        </button>
+        <button
+          className={`toolbar__toggle toolbar__toggle--icon toolbar__toggle--prominent${trackJumps ? ' toolbar__toggle--on' : ''}`}
+          onClick={() => setTrackJumps(!trackJumps)}
+          aria-pressed={trackJumps}
+          aria-label={trackJumps ? t('toolbar.trackJumpsOn') : t('toolbar.trackJumpsOff')}
+          data-tooltip={trackJumps
+            ? t('toolbar.trackJumpsTooltipOn')
+            : t('toolbar.trackJumpsTooltipOff')}
+        >
+          <FootprintsIcon size={18} weight="regular" />
+          <span className={`toolbar__toggle-led${trackJumps ? ' toolbar__toggle-led--on' : ' toolbar__toggle-led--off'}`} />
+        </button>
         <LanguageSwitcher compact />
         <button
           className="toolbar__toggle toolbar__toggle--icon"

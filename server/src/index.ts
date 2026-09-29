@@ -67,11 +67,10 @@ const PgStore = connectPgSimple(session);
 const app = express();
 const PORT = process.env.PORT ?? 3001;
 
-// Proxy hops to trust for the client IP / protocol. 1 = one proxy directly in
-// front (nginx or Traefik). Behind a platform load balancer AND nginx (e.g.
-// Sliplane) set TRUST_PROXY_HOPS=2, or every client resolves to the balancer's
-// IP and shares a single rate-limit bucket.
-app.set('trust proxy', parseInt(process.env.TRUST_PROXY_HOPS ?? '1', 10));
+// Number of proxies in front of us — see config.trustProxy. Express uses this
+// to pick the client's address out of X-Forwarded-For, which is what every
+// IP-keyed rate limit is bucketed on.
+app.set('trust proxy', config.trustProxy);
 app.disable('x-powered-by');
 
 // Default Helmet is safe for a JSON API: HSTS (HTTPS only), nosniff,
