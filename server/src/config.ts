@@ -44,9 +44,7 @@ const CORP_MAP_TIME = parseInt(process.env.CORP_MAP_TIME ?? '30', 10);
 //   1 = the shipped compose (nginx -> server)
 //   2 = behind Traefik as well (Traefik -> nginx -> server)
 // Raise it by one for each additional proxy you put in front.
-// TRUST_PROXY_HOPS is the name this fork shipped first (and what the Sliplane
-// deployment still sets); TRUST_PROXY is the upstream name and wins when both are set.
-const TRUST_PROXY_RAW = parseInt(process.env.TRUST_PROXY ?? process.env.TRUST_PROXY_HOPS ?? '1', 10);
+const TRUST_PROXY_RAW = parseInt(process.env.TRUST_PROXY ?? '1', 10);
 const TRUST_PROXY = Number.isInteger(TRUST_PROXY_RAW) && TRUST_PROXY_RAW >= 0 ? TRUST_PROXY_RAW : 1;
 
 // Role a NEW user is created with on a restricted (corp/alliance) instance.
